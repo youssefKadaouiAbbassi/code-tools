@@ -1,7 +1,0 @@
-{
-  "tool_name": "WebFetch",
-  "tool_input_preview": "{\"url\":\"https://github.com/multica-ai/multica/blob/main/backend/internal/skills\",\"prompt\":\"Read the skills directory. What files are here? What does the skills system actually do in the code?\"}",
-  "error": "Request failed with status code 404",
-  "timestamp": "2026-04-13T11:10:00.863Z",
-  "retry_count": 1
-}

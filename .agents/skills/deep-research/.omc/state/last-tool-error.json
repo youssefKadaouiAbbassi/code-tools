@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"which wkhtmltopdf weasyprint chromium google-chrome chrome pandoc 2>&1; echo \\\"---\\\"; which pdf-convert 2>&1\",\"description\":\"Check available PDF generators\"}",
-  "error": "Exit code 1\nwkhtmltopdf not found\n/home/izno/.local/bin/weasyprint\nchromium not found\n/usr/bin/google-chrome\nchrome not found\npandoc not found\n---\npdf-convert not found\n[rerun: b17]",
-  "timestamp": "2026-04-11T13:04:04.569Z",
-  "retry_count": 1
-}
