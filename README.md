@@ -5,6 +5,53 @@
 
 ---
 
+## Installation
+
+### Quick Start
+
+```bash
+bunx @youssefKadaouiAbbassi/code-tools-setup
+```
+
+### Non-Interactive (CI / scripting)
+
+```bash
+bunx @youssefKadaouiAbbassi/code-tools-setup --non-interactive
+```
+
+### Dry Run (preview changes)
+
+```bash
+bunx @youssefKadaouiAbbassi/code-tools-setup --dry-run
+```
+
+### Install a Specific Tier
+
+```bash
+bunx @youssefKadaouiAbbassi/code-tools-setup --tier primordial    # core only
+bunx @youssefKadaouiAbbassi/code-tools-setup --tier recommended   # core + recommended
+bunx @youssefKadaouiAbbassi/code-tools-setup --tier all           # everything
+```
+
+### Fresh Machine (no Bun installed)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/youssefKadaouiAbbassi/code-tools/master/bootstrap.sh | bash
+```
+
+### Development
+
+```bash
+git clone https://github.com/youssefKadaouiAbbassi/code-tools.git
+cd code-tools
+bun install
+bun run dev                    # run the installer locally
+bun test                       # run tests
+bun run build                  # compile to standalone binary
+```
+
+---
+
 ## Architecture
 
 ```

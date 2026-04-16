@@ -1,0 +1,11 @@
+{
+  "_comment": "Local overrides — this file is gitignored. Do not commit.",
+  "_overrides": {
+    "model": "Override the project model. Example: 'claude-opus-4-6' for complex tasks.",
+    "effortLevel": "Override effort level. Options: 'low', 'medium', 'high'.",
+    "permissions.allow": "Add patterns to allow locally that are denied at project level.",
+    "permissions.deny": "Add extra deny patterns specific to your local environment.",
+    "experimentalAgentTeams": "Set to false to disable agent teams locally if causing issues."
+  },
+  "effortLevel": "medium"
+}

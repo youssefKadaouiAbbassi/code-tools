@@ -1,0 +1,38 @@
+{
+  "mcpServers": {
+    "serena": {
+      "type": "stdio",
+      "command": "serena-agent",
+      "args": ["start-mcp-server", "--project", "."]
+    },
+    "docfork": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "docfork", "--api-key", "${DOCFORK_API_KEY}"]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_PAT}"
+      }
+    },
+    "context-mode": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "context-mode"]
+    },
+    "composio": {
+      "type": "http",
+      "url": "https://backend.composio.dev/v3/mcp/${COMPOSIO_MCP_SERVER_ID}?user_id=${COMPOSIO_USER_ID}",
+      "headers": {
+        "x-api-key": "${COMPOSIO_API_KEY}"
+      }
+    },
+    "snyk": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "snyk", "mcp"]
+    }
+  }
+}

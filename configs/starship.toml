@@ -1,0 +1,114 @@
+# Minimal starship prompt — optimized for Claude Code workflows
+# Focus: directory, git state, runtime versions, clean character
+
+format = """
+$directory\
+$git_branch\
+$git_status\
+$nodejs\
+$bun\
+$python\
+$rust\
+$golang\
+$character"""
+
+# No newline before prompt
+add_newline = false
+
+[directory]
+truncation_length = 3
+truncate_to_repo = true
+style = "bold blue"
+format = "[$path]($style) "
+
+[git_branch]
+symbol = " "
+style = "bold purple"
+format = "[$symbol$branch]($style) "
+truncation_length = 24
+truncation_symbol = "…"
+
+[git_status]
+style = "bold yellow"
+format = "([$all_status$ahead_behind]($style) )"
+conflicted = "="
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+untracked = "?"
+stashed = "$"
+modified = "!"
+staged = "+"
+renamed = "»"
+deleted = "✘"
+
+[nodejs]
+symbol = " "
+style = "bold green"
+format = "[$symbol$version]($style) "
+detect_files = ["package.json", ".nvmrc", ".node-version"]
+detect_folders = ["node_modules"]
+
+[bun]
+symbol = "🥟 "
+style = "bold yellow"
+format = "[$symbol$version]($style) "
+detect_files = ["bun.lockb", "bunfig.toml"]
+
+[python]
+symbol = " "
+style = "bold yellow"
+format = "[$symbol$version]($style) "
+detect_files = ["requirements.txt", "pyproject.toml", ".python-version", "Pipfile"]
+detect_extensions = ["py"]
+
+[rust]
+symbol = " "
+style = "bold red"
+format = "[$symbol$version]($style) "
+detect_files = ["Cargo.toml"]
+
+[golang]
+symbol = " "
+style = "bold cyan"
+format = "[$symbol$version]($style) "
+detect_files = ["go.mod"]
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol   = "[❯](bold red)"
+vimcmd_symbol  = "[❮](bold green)"
+
+# Disabled modules — keep prompt minimal
+[aws]
+disabled = true
+
+[gcloud]
+disabled = true
+
+[azure]
+disabled = true
+
+[docker_context]
+disabled = true
+
+[kubernetes]
+disabled = true
+
+[terraform]
+disabled = true
+
+[time]
+disabled = true
+
+[username]
+disabled = true
+
+[hostname]
+disabled = true
+
+[cmd_duration]
+disabled = false
+min_time = 5000
+style = "bold yellow"
+format = "[$duration]($style) "

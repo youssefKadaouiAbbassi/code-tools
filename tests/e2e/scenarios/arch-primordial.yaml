@@ -1,0 +1,22 @@
+name: Arch Primordial Install
+container: arch.Dockerfile
+command: ["bun", "run", "/app/bin/setup.ts", "--non-interactive", "--tier", "primordial"]
+preconditions:
+  no_claude_config: true
+expected:
+  exit_code: 0
+  files_exist:
+    - /root/.claude/settings.json
+    - /root/.claude/CLAUDE.md
+    - /root/.claude/hooks/pre-destructive-blocker.sh
+    - /root/.claude/hooks/pre-secrets-guard.sh
+    - /root/.claude/hooks/post-lint-gate.sh
+    - /root/.claude/hooks/session-start.sh
+    - /root/.claude/hooks/session-end.sh
+    - /root/.claude/hooks/stop-summary.sh
+    - /root/.tmux.conf
+    - /root/.config/starship.toml
+  binaries_available:
+    - jq
+    - tmux
+  settings_deny_rules_min: 40

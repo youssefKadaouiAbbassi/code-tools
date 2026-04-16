@@ -1,0 +1,589 @@
+import { $ } from "bun";
+import { join } from "node:path";
+import { symlink } from "node:fs/promises";
+import type { DetectedEnvironment, InstallResult } from "./types.js";
+import {
+  copyFile,
+  ensureDir,
+  mergeJsonFile,
+  appendToShellRc,
+  installBinary,
+  getConfigsDir,
+  fileExists,
+  log,
+} from "./utils.js";
+import { createBackup, restoreFromPartialManifest } from "./backup.js";
+
+// --- Sub-functions ---
+
+async function deploySettings(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "claude-settings";
+  const targetPath = join(env.claudeDir, "settings.json");
+  const sourcePath = join(getConfigsDir(), "home-claude", "settings.json");
+
+  if (dryRun) {
+    log.info(`[dry-run] Would merge ${sourcePath} into ${targetPath}`);
+    return { component, status: "skipped", message: `[dry-run] Would merge settings.json`, verifyPassed: false };
+  }
+
+  try {
+    await ensureDir(env.claudeDir);
+    const patch = await Bun.file(sourcePath).json() as Record<string, unknown>;
+    await mergeJsonFile(targetPath, patch);
+    log.success(`Merged settings.json into ${targetPath}`);
+    return { component, status: "installed", message: `Settings merged into ${targetPath}`, verifyPassed: true };
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to deploy settings: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+async function deployClaudeMd(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "claude-md";
+  const sourcePath = join(getConfigsDir(), "home-claude", "CLAUDE.md");
+  const targetPath = join(env.claudeDir, "CLAUDE.md");
+  const agentsLink = join(env.claudeDir, "AGENTS.md");
+  const geminiLink = join(env.claudeDir, "GEMINI.md");
+
+  if (dryRun) {
+    log.info(`[dry-run] Would copy ${sourcePath} -> ${targetPath}`);
+    log.info(`[dry-run] Would create symlinks AGENTS.md -> CLAUDE.md and GEMINI.md -> CLAUDE.md`);
+    return { component, status: "skipped", message: `[dry-run] Would deploy CLAUDE.md and symlinks`, verifyPassed: false };
+  }
+
+  try {
+    await ensureDir(env.claudeDir);
+    await copyFile(sourcePath, targetPath);
+
+    // Create symlinks, removing stale ones first
+    for (const linkPath of [agentsLink, geminiLink]) {
+      const linkExists = await fileExists(linkPath);
+      if (linkExists) {
+        await $`rm -f ${linkPath}`.quiet();
+      }
+      await symlink("CLAUDE.md", linkPath);
+    }
+
+    log.success(`Deployed CLAUDE.md with AGENTS.md and GEMINI.md symlinks`);
+    return { component, status: "installed", message: `CLAUDE.md deployed with symlinks`, verifyPassed: true };
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to deploy CLAUDE.md: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+/**
+ * Deploy the orchestration skills from `skills/` into `~/.claude/skills/`.
+ * These are custom skills we wrote that reference OUR installed plugins by name
+ * (ship-feature, refactor-safely, fix-bug, security-audit, onboard-codebase, dev).
+ */
+async function deploySkills(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "orchestration-skills";
+  const src = join(getConfigsDir(), "..", "skills");
+  const dst = join(env.claudeDir, "skills");
+
+  if (dryRun) {
+    log.info(`[dry-run] Would deploy orchestration skills from ${src} to ${dst}`);
+    return { component, status: "skipped", message: "[dry-run] Would deploy orchestration skills", verifyPassed: false };
+  }
+
+  try {
+    const skillDirs = await Array.fromAsync(new Bun.Glob("*/SKILL.md").scan({ cwd: src, onlyFiles: true }));
+    let count = 0;
+    for (const rel of skillDirs) {
+      const skillName = rel.split("/")[0];
+      const targetDir = join(dst, skillName);
+      await ensureDir(targetDir);
+      await copyFile(join(src, rel), join(targetDir, "SKILL.md"));
+      count++;
+    }
+    log.success(`Deployed ${count} orchestration skill(s) to ${dst}`);
+    return { component, status: "installed", message: `${count} orchestration skills deployed`, verifyPassed: true };
+  } catch (err) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to deploy skills: ${err instanceof Error ? err.message : String(err)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+/**
+ * Deploy user-level slash commands from `commands/` → `~/.claude/commands/`.
+ * Currently ships `/dev` — the top-level orchestrator that drives the full
+ * clarify → classify → plan → dispatch → review → record workflow.
+ */
+async function deployCommands(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "user-commands";
+  const src = join(getConfigsDir(), "..", "commands");
+  const dst = join(env.claudeDir, "commands");
+
+  if (dryRun) {
+    log.info(`[dry-run] Would deploy slash commands from ${src} to ${dst}`);
+    return { component, status: "skipped", message: "[dry-run] Would deploy user commands", verifyPassed: false };
+  }
+
+  try {
+    const files = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: src, onlyFiles: true }));
+    await ensureDir(dst);
+    for (const f of files) {
+      await copyFile(join(src, f), join(dst, f));
+    }
+    log.success(`Deployed ${files.length} slash command(s) to ${dst}`);
+    return { component, status: "installed", message: `${files.length} user commands deployed`, verifyPassed: true };
+  } catch (err) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to deploy commands: ${err instanceof Error ? err.message : String(err)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+/**
+ * Deploy user-level subagents from `agents/` → `~/.claude/agents/`.
+ * These are specialists the /dev orchestrator dispatches to (dev-classifier,
+ * dev-clarifier, dev-recorder). Note: the repo's agents/ dir also contains
+ * higher-level "role" agents (architect, implementer, etc.) which pre-date
+ * this work — we deploy all of them.
+ */
+async function deployAgents(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "user-agents";
+  const src = join(getConfigsDir(), "..", "agents");
+  const dst = join(env.claudeDir, "agents");
+
+  if (dryRun) {
+    log.info(`[dry-run] Would deploy subagents from ${src} to ${dst}`);
+    return { component, status: "skipped", message: "[dry-run] Would deploy user agents", verifyPassed: false };
+  }
+
+  try {
+    const files = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: src, onlyFiles: true }));
+    await ensureDir(dst);
+    let count = 0;
+    for (const f of files) {
+      // Skip AGENTS.md — it's documentation ABOUT the agents, not an agent itself
+      if (f.toUpperCase() === "AGENTS.md") continue;
+      await copyFile(join(src, f), join(dst, f));
+      count++;
+    }
+    log.success(`Deployed ${count} subagent(s) to ${dst}`);
+    return { component, status: "installed", message: `${count} user agents deployed`, verifyPassed: true };
+  } catch (err) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to deploy agents: ${err instanceof Error ? err.message : String(err)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+async function deployHooks(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "claude-hooks";
+  const hooksSourceDir = join(getConfigsDir(), "hooks");
+  const hooksTargetDir = join(env.claudeDir, "hooks");
+
+  if (dryRun) {
+    log.info(`[dry-run] Would copy hook scripts from ${hooksSourceDir} to ${hooksTargetDir} and chmod +x`);
+    return { component, status: "skipped", message: `[dry-run] Would deploy 6 hook scripts`, verifyPassed: false };
+  }
+
+  try {
+    await ensureDir(hooksTargetDir);
+
+    const hookFiles = await Array.fromAsync(
+      new Bun.Glob("*.{sh,js,ts,py}").scan({ cwd: hooksSourceDir, onlyFiles: true })
+    );
+
+    for (const hookFile of hookFiles) {
+      const src = join(hooksSourceDir, hookFile);
+      const dest = join(hooksTargetDir, hookFile);
+      await copyFile(src, dest);
+      await $`chmod 700 ${dest}`.quiet();
+    }
+    await $`chmod 700 ${hooksTargetDir}`.quiet();
+
+    // CRITICAL: also wire each hook into settings.json — without this Claude Code
+    // never invokes them. Bug pre-2026-04-15: hooks were deployed but dormant.
+    const settingsPath = join(env.claudeDir, "settings.json");
+    const hookFilenames = new Set(hookFiles);
+    const cmd = (name: string) => ({ type: "command", command: join(hooksTargetDir, name) });
+
+    const hooksConfig: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string }> }>> = {};
+
+    if (hookFilenames.has("pre-secrets-guard.sh") || hookFilenames.has("pre-destructive-blocker.sh")) {
+      hooksConfig.PreToolUse = [];
+      if (hookFilenames.has("pre-secrets-guard.sh")) {
+        // Secret-scan every tool input (matcher omitted = all tools)
+        hooksConfig.PreToolUse.push({ hooks: [cmd("pre-secrets-guard.sh")] });
+      }
+      if (hookFilenames.has("pre-destructive-blocker.sh")) {
+        // Destructive-command screen runs only on Bash
+        hooksConfig.PreToolUse.push({ matcher: "Bash", hooks: [cmd("pre-destructive-blocker.sh")] });
+      }
+    }
+
+    if (hookFilenames.has("post-lint-gate.sh")) {
+      hooksConfig.PostToolUse = [
+        { matcher: "Write|Edit|MultiEdit", hooks: [cmd("post-lint-gate.sh")] },
+      ];
+    }
+
+    if (hookFilenames.has("session-start.sh")) {
+      hooksConfig.SessionStart = [{ hooks: [cmd("session-start.sh")] }];
+    }
+    if (hookFilenames.has("session-end.sh")) {
+      hooksConfig.SessionEnd = [{ hooks: [cmd("session-end.sh")] }];
+    }
+    if (hookFilenames.has("stop-summary.sh")) {
+      hooksConfig.Stop = [{ hooks: [cmd("stop-summary.sh")] }];
+    }
+
+    await mergeJsonFile(settingsPath, { hooks: hooksConfig });
+
+    log.success(`Deployed ${hookFiles.length} hook scripts and wired them into settings.json`);
+    return { component, status: "installed", message: `${hookFiles.length} hook scripts deployed and wired`, verifyPassed: true };
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to deploy hooks: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+async function installJq(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  return installBinary(
+    {
+      name: "jq",
+      displayName: "jq",
+      brew: "brew install jq",
+      apt: "sudo apt-get install -y jq",
+      pacman: "sudo pacman -S --noconfirm jq",
+      dnf: "sudo dnf install -y jq",
+    },
+    env,
+    dryRun
+  );
+}
+
+async function installTmux(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "tmux";
+  const tmuxConfSource = join(getConfigsDir(), "tmux.conf");
+  const tmuxConfTarget = join(env.homeDir, ".tmux.conf");
+
+  const binResult = await installBinary(
+    {
+      name: "tmux",
+      displayName: "tmux",
+      brew: "brew install tmux",
+      apt: "sudo apt-get install -y tmux",
+      pacman: "sudo pacman -S --noconfirm tmux",
+      dnf: "sudo dnf install -y tmux",
+    },
+    env,
+    dryRun
+  );
+
+  if (dryRun) {
+    log.info(`[dry-run] Would copy ${tmuxConfSource} -> ${tmuxConfTarget}`);
+    return { ...binResult, component };
+  }
+
+  // Deploy config regardless of whether tmux was just installed or already present
+  try {
+    await copyFile(tmuxConfSource, tmuxConfTarget);
+    log.success(`Deployed tmux.conf to ${tmuxConfTarget}`);
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `tmux binary ok but failed to deploy config: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+
+  return { ...binResult, component };
+}
+
+async function installStarship(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "starship";
+  const starshipConfSource = join(getConfigsDir(), "starship.toml");
+  const starshipConfTarget = join(env.homeDir, ".config", "starship.toml");
+
+  const pkg =
+    env.packageManager === "brew"
+      ? {
+          name: "starship",
+          displayName: "starship",
+          brew: "brew install starship",
+        }
+      : {
+          name: "starship",
+          displayName: "starship",
+          curl: "curl -sS https://starship.rs/install.sh | sh -s -- -y",
+        };
+
+  const binResult = await installBinary(pkg, env, dryRun);
+
+  if (dryRun) {
+    log.info(`[dry-run] Would copy ${starshipConfSource} -> ${starshipConfTarget}`);
+    log.info(`[dry-run] Would append starship init to ${env.shellRcPath}`);
+    return { ...binResult, component };
+  }
+
+  try {
+    await ensureDir(join(env.homeDir, ".config"));
+    await copyFile(starshipConfSource, starshipConfTarget);
+    log.success(`Deployed starship.toml to ${starshipConfTarget}`);
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `starship binary ok but failed to deploy config: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+
+  await appendToShellRc(env, [`eval "$(starship init ${env.shell})"`], "starship");
+
+  return { ...binResult, component };
+}
+
+async function deployStatusline(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "statusline";
+  const sourcePath = join(getConfigsDir(), "statusline.sh");
+  const targetPath = join(env.claudeDir, "statusline.sh");
+
+  if (dryRun) {
+    log.info(`[dry-run] Would copy ${sourcePath} -> ${targetPath} and chmod +x`);
+    return { component, status: "skipped", message: `[dry-run] Would deploy statusline.sh`, verifyPassed: false };
+  }
+
+  try {
+    await ensureDir(env.claudeDir);
+    await copyFile(sourcePath, targetPath);
+    await $`chmod +x ${targetPath}`.quiet();
+    log.success(`Deployed statusline.sh to ${targetPath}`);
+    return { component, status: "installed", message: `statusline.sh deployed and made executable`, verifyPassed: true };
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to deploy statusline: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+// `deployBasicMcpConfig` removed 2026-04-15.
+// Was writing wrong package names (`github-mcp`, `snyk-mcp`, `composio-mcp` — none exist on npm)
+// and a stale `postgres` key that duplicated `postgres-mcp-pro` from database.ts.
+// Each category installer now owns its own MCP registration with the correct package
+// names and protocol (http vs stdio).
+
+async function installMise(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "mise";
+
+  if (dryRun) {
+    log.info(`[dry-run] Would install mise via curl https://mise.run | sh`);
+    log.info(`[dry-run] Would append mise activate to ${env.shellRcPath}`);
+    return { component, status: "skipped", message: `[dry-run] Would install mise`, verifyPassed: false };
+  }
+
+  const result = await installBinary(
+    {
+      name: "mise",
+      displayName: "mise",
+      curl: "curl https://mise.run | sh",
+    },
+    env,
+    dryRun
+  );
+
+  if (result.status === "installed" || result.status === "already-installed") {
+    await appendToShellRc(env, [`eval "$(mise activate ${env.shell})"`], "mise");
+  }
+
+  return { ...result, component };
+}
+
+async function installJust(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  return installBinary(
+    {
+      name: "just",
+      displayName: "just",
+      brew: "brew install just",
+      apt: "sudo apt-get install -y just",
+      pacman: "sudo pacman -S --noconfirm just",
+      dnf: "sudo dnf install -y just",
+      curl: "curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin",
+    },
+    env,
+    dryRun
+  );
+}
+
+async function addGitAliases(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "git-aliases";
+  const aliases: Array<[string, string]> = [
+    ["wt", "worktree"],
+    ["wta", "worktree add"],
+    ["wtl", "worktree list"],
+    ["wtr", "worktree remove"],
+  ];
+
+  if (dryRun) {
+    for (const [alias, value] of aliases) {
+      log.info(`[dry-run] Would run: git config --global alias.${alias} "${value}"`);
+    }
+    return { component, status: "skipped", message: `[dry-run] Would add 4 git worktree aliases`, verifyPassed: false };
+  }
+
+  try {
+    for (const [alias, value] of aliases) {
+      await $`git config --global alias.${alias} ${value}`.quiet();
+    }
+    log.success(`Added git worktree aliases: wt, wta, wtl, wtr`);
+    return { component, status: "installed", message: `Git aliases wt, wta, wtl, wtr configured`, verifyPassed: true };
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to add git aliases: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+async function enableTelemetry(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "telemetry";
+  const lines = [
+    "export CLAUDE_CODE_ENABLE_TELEMETRY=1",
+    "export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
+  ];
+
+  if (dryRun) {
+    log.info(`[dry-run] Would append telemetry env vars to ${env.shellRcPath}`);
+    return { component, status: "skipped", message: `[dry-run] Would enable telemetry env vars`, verifyPassed: false };
+  }
+
+  try {
+    await appendToShellRc(env, lines, "claude-telemetry");
+    log.success(`Telemetry env vars added to ${env.shellRcPath}`);
+    return { component, status: "installed", message: `Telemetry env vars added to shell rc`, verifyPassed: true };
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to enable telemetry: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+async function setCavemanDefaultMode(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "caveman-default-mode";
+  // Caveman plugin reads CAVEMAN_DEFAULT_MODE at SessionStart. Setting `full` here
+  // makes terse output the default for new shells, ~65% output token reduction
+  // (per their benchmarks). Override with `lite`/`ultra`/`off` per session as needed.
+  const lines = ["export CAVEMAN_DEFAULT_MODE=full"];
+
+  if (dryRun) {
+    log.info(`[dry-run] Would append CAVEMAN_DEFAULT_MODE=full to ${env.shellRcPath}`);
+    return { component, status: "skipped", message: `[dry-run] Would set caveman default mode`, verifyPassed: false };
+  }
+
+  try {
+    await appendToShellRc(env, lines, "caveman");
+    log.success(`CAVEMAN_DEFAULT_MODE=full added to ${env.shellRcPath}`);
+    return { component, status: "installed", message: `caveman default mode set to 'full'`, verifyPassed: true };
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to set caveman default: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+async function createLessons(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+  const component = "lessons";
+  const lessonsPath = join(process.cwd(), "tasks", "lessons.md");
+
+  if (dryRun) {
+    log.info(`[dry-run] Would create ${lessonsPath} if it does not exist`);
+    return { component, status: "skipped", message: `[dry-run] Would create tasks/lessons.md if absent`, verifyPassed: false };
+  }
+
+  if (await fileExists(lessonsPath)) {
+    return { component, status: "already-installed", message: `tasks/lessons.md already exists, not overwriting`, verifyPassed: true };
+  }
+
+  try {
+    await ensureDir(join(process.cwd(), "tasks"));
+    await Bun.write(lessonsPath, "# Lessons\n");
+    log.success(`Created tasks/lessons.md`);
+    return { component, status: "installed", message: `tasks/lessons.md created`, verifyPassed: true };
+  } catch (error) {
+    return {
+      component,
+      status: "failed",
+      message: `Failed to create lessons.md: ${error instanceof Error ? error.message : String(error)}`,
+      verifyPassed: false,
+    };
+  }
+}
+
+// --- Main export ---
+
+export async function installPrimordial(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
+  const backupPaths = [
+    join(env.claudeDir, "settings.json"),
+    join(env.claudeDir, "CLAUDE.md"),
+    join(env.homeDir, ".tmux.conf"),
+    join(env.homeDir, ".config", "starship.toml"),
+    env.shellRcPath,
+  ];
+
+  const backup = await createBackup(backupPaths);
+  const results: InstallResult[] = [];
+
+  try {
+    results.push(await deploySettings(env, dryRun));
+    results.push(await deployClaudeMd(env, dryRun));
+    results.push(await deployHooks(env, dryRun));
+    results.push(await deploySkills(env, dryRun));
+    results.push(await deployCommands(env, dryRun));
+    results.push(await deployAgents(env, dryRun));
+    // (basic MCP config removed — each category installer now registers its own MCP)
+    results.push(await installJq(env, dryRun));
+    results.push(await installTmux(env, dryRun));
+    results.push(await installStarship(env, dryRun));
+    results.push(await deployStatusline(env, dryRun));
+    results.push(await installMise(env, dryRun));
+    results.push(await installJust(env, dryRun));
+    results.push(await addGitAliases(env, dryRun));
+    results.push(await enableTelemetry(env, dryRun));
+    results.push(await setCavemanDefaultMode(env, dryRun));
+    results.push(await createLessons(env, dryRun));
+    return results;
+  } catch (error) {
+    log.error("Primordial install failed, restoring backup...");
+    await restoreFromPartialManifest(backup);
+    throw error;
+  }
+}

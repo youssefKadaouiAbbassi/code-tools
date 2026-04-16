@@ -1,0 +1,53 @@
+{
+  "name": "@youssefKadaouiAbbassi/code-tools-setup",
+  "version": "0.1.0",
+  "description": "Interactive CLI installer for the Ultimate Claude Code System v12",
+  "type": "module",
+  "bin": {
+    "code-tools-setup": "./bin/setup.ts"
+  },
+  "scripts": {
+    "dev": "bun run bin/setup.ts",
+    "build": "bun build bin/setup.ts --compile --outfile dist/code-tools-setup",
+    "build:npm": "bun build bin/setup.ts --outdir dist --target node",
+    "start": "bun run bin/setup.ts",
+    "test": "bun test",
+    "test:unit": "bun test tests/unit",
+    "test:integration": "bun test tests/integration",
+    "test:e2e": "bun test tests/e2e",
+    "test:ci": "bats tests/ci/verify.bats",
+    "lint:hooks": "shellcheck configs/hooks/*.sh configs/project-claude/hooks/*.sh"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.10",
+    "picocolors": "^1.1",
+    "citty": "^0.2",
+    "deepmerge-ts": "^7.0"
+  },
+  "devDependencies": {
+    "@gmrchk/cli-testing-library": "^0.1.2",
+    "@types/bun": "latest",
+    "testcontainers": "^10.0",
+    "typescript": "^5.8"
+  },
+  "engines": {
+    "bun": ">=1.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "configs/",
+    "agents/"
+  ],
+  "keywords": [
+    "claude-code",
+    "cli",
+    "installer",
+    "setup",
+    "bun"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -fd*)",
+      "Bash(terraform destroy*)",
+      "Bash(terraform apply -auto-approve*)",
+      "Bash(kubectl delete namespace*)",
+      "Bash(docker system prune -af*)",
+      "Bash(npm publish*)",
+      "Bash(cargo publish*)",
+      "Read(.env)",
+      "Read(.env.*)"
+    ]
+  },
+  "effortLevel": "medium",
+  "experimentalAgentTeams": true
+}

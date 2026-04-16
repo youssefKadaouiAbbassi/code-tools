@@ -1,0 +1,8 @@
+node_modules/
+.git/
+.omc/
+test-output/
+dist/
+*.log
+.env*
+coverage/

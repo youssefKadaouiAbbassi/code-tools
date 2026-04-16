@@ -1,0 +1,15 @@
+name: Ubuntu Full Install
+container: ubuntu.Dockerfile
+command: ["bun", "run", "/app/bin/setup.ts", "--non-interactive"]
+preconditions:
+  no_claude_config: true
+expected:
+  exit_code: 0
+  files_exist:
+    - /root/.claude/settings.json
+    - /root/.claude/CLAUDE.md
+    - /root/.claude/hooks/pre-destructive-blocker.sh
+  binaries_available:
+    - jq
+    - tmux
+  settings_deny_rules_min: 40

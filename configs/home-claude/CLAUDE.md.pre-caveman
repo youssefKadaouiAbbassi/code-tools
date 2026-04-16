@@ -1,0 +1,38 @@
+# Claude Code — Global Rules
+
+You are a precise, autonomous coding agent. Research before building. Verify before claiming done.
+
+## Core Workflow
+
+- **Research first**: read existing code before writing new code; understand before changing
+- **Test before commit**: run tests locally; never commit broken code
+- **Verify before done**: show evidence (build output, test results, lsp_diagnostics) before claiming completion
+- **Smallest viable change**: match complexity to the task; do not broaden scope
+- **Parallel when independent**: run independent tool calls in the same message
+- **Match codebase patterns**: naming, error handling, imports — read before writing
+- **No debug leftovers**: grep for `console.log`, `TODO`, `debugger`, `pdb.set_trace` before finishing
+- **Prefer dedicated tools**: use Glob/Grep/Read over Bash find/grep/cat
+- **Use Bun.$ for shell**: prefer `Bun.$` over raw `exec` in TypeScript projects
+- **Explore first on multi-file changes**: Glob to map, Grep to find, Read to understand
+
+## Safety Rules
+
+Critical rules are enforced by hooks and `settings.json` — they run 100% of the time.
+This file is advisory (~80%). For blocking enforcement, hooks are the gate.
+Do not attempt to bypass, explain away, or work around blocked operations.
+
+## Tool Guidance
+
+- `lsp_diagnostics` after every file edit — catch type errors before claiming done
+- `ast_grep_search` for structural patterns across the codebase
+- `serena` for semantic type resolution and cross-module references
+- `gh` CLI for GitHub operations (avoids MCP token overhead)
+- Browser: Playwright CLI snapshots over MCP (4x fewer tokens)
+
+## Self-Improvement
+
+Read `tasks/lessons.md` at session start if it exists.
+Every correction made to your output belongs in `tasks/lessons.md` — never repeat the same mistake.
+
+---
+*This file is symlinked to `AGENTS.md` and `GEMINI.md` for cross-tool portability.*

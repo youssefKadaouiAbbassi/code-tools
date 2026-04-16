@@ -1,0 +1,6 @@
+{
+  "name": "code-tools-setup",
+  "description": "Interactive installer for the Ultimate Claude Code System v12",
+  "version": "0.1.0",
+  "skills": ["skills/setup/SKILL.md"]
+}

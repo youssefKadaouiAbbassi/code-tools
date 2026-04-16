@@ -1,0 +1,10 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "permissions": {
+    "deny": ["rm -rf /", "custom-user-rule"]
+  },
+  "mcpServers": {
+    "my-custom-mcp": { "type": "stdio", "command": "my-tool" }
+  },
+  "customUserSetting": true
+}
