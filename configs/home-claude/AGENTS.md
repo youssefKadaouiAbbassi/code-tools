@@ -42,14 +42,16 @@ Local tool still first when a 1-line CLI does it (`Read`, `Grep`, `gh`, `bun`, `
 
 **Verification loop rule**: for every library claim (API shape, flag, version behavior) Claude states, either (a) cite the docfork/deepwiki result inline OR (b) note "unverified, training-cutoff" and call the MCP before finalizing. Unsourced lib claims = lint failure.
 
-### Skill-before-code rule
+### Skill-before-code rule (3-tier model)
 
-Before writing any procedure that *could* exist as a reusable skill (browser automation, CI config, OAuth flow, file format parsing, test harness, deployment recipe, etc.):
+Before writing any procedure that *could* exist as a reusable skill (browser automation, CI config, OAuth flow, file format parsing, test harness, deployment recipe, etc.), check each tier in order:
 
-1. **Activate `find-skills`** (installed from skills.sh — the 90k-skill open registry). It searches the catalog and returns ranked matches with install commands.
-2. If a match exists → `npx skills add <owner/repo> --skill <name> -g -y` — reuse existing skill, don't reinvent.
-3. Only write custom skill logic if no existing skill covers the task (or all candidates are weaker than a custom one).
-4. Custom skills live in this repo's `skills/` dir; external skills come from skills.sh and stay auto-updatable via `npx skills update`.
+1. **Tier 1 — user-global base** (`~/.claude/skills/`): always-on baseline. Contains our 10 custom skills + skills.sh seed bundle (`find-skills`, `caveman`, `karpathy-guidelines`, `playwright-cli`). If a match exists here, use it.
+2. **Tier 2 — project-scoped auto-seed** (`<project>/.claude/skills/`): stack-aware skills installed by `autoskills` when the project was first opened. If the user just entered a fresh project with no `.claude/skills/` dir, run `npx autoskills -y` (scans `package.json` / Gradle / configs → installs matching skills.sh bundle + writes project `CLAUDE.md`). Covers React, Next.js, Prisma, Stripe, Playwright, Clerk, Supabase, Go, Bun, Deno, Kotlin, Flutter, Terraform, etc. — ~30 curated stacks.
+3. **Tier 3 — on-demand via `find-skills`**: if the task needs a capability not in Tier 1/2 (niche API wrapper, obscure CLI, etc.), activate `find-skills` to search skills.sh's full 90k-skill catalog. Install with `npx skills add <owner/repo> --skill <name> -g -y` (use `-g` for user scope when the skill is reusable across projects, drop `-g` when it's project-specific).
+4. Only write custom skill logic when all three tiers fail (no existing skill covers the task or all candidates are weaker). Custom skills live in this repo's `skills/` dir and ship with the installer.
+
+Rule of thumb: local tool first (`Read`, `Grep`, `gh`, `bun`, `uv`); Tier 1 for always-on skills; Tier 2 for new projects; Tier 3 for surprise gaps.
 
 ### Proactive follow-up offers
 

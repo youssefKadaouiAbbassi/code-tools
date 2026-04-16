@@ -27,6 +27,7 @@ Load and apply the `karpathy-guidelines` skill alongside this workflow. Short ve
 
 | Condition | Tool | Why |
 |---|---|---|
+| First time in this project AND no `.claude/skills/` dir exists yet | `npx autoskills -y` | Scans stack (React / Next / Prisma / Stripe / Go / Bun / …), installs matching skills.sh bundle to project scope, writes project `CLAUDE.md`. Run BEFORE exploring so subsequent steps have stack-aware skills loaded |
 | Always — map the tree in parallel | `Explore` agent + `serena` symbol map + `/claude-mem:mem-search` + `/claude-mem:smart-explore` — **ONE message, 4 parallel Task calls** | 4× speedup vs sequential |
 | Multi-generation codebase; want narrative history | `/claude-mem:timeline-report` | Generates project history from memory observations |
 | Build a focused Q&A brain over prior work on this repo | `/claude-mem:knowledge-agent` | Compiles observations into a searchable knowledge base |
