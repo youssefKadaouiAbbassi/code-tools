@@ -67,8 +67,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
         verifyPassed: false,
       });
     } else {
-      // Install snyk globally first, then configure MCP. The original `npx snyk mcp configure`
-      // does not install snyk — it runs ephemerally via npx and leaves no binary.
       await $`sh -c "npm install -g snyk@latest"`;
       await $`sh -c "snyk mcp configure --tool=claude-cli"`.nothrow();
       const installed = commandExists("snyk");
@@ -90,7 +88,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
 
   // --- container-use ---
   try {
-    // Binary is installed as `container-use`; some setups also alias to `cu`.
     const cuExists = () => commandExists("container-use") || commandExists("cu");
     if (cuExists()) {
       log.info("container-use already installed, skipping");
@@ -116,7 +113,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       if (env.packageManager === "brew") {
         cmd = "brew install dagger/tap/container-use";
       } else {
-        // Download from GitHub releases (the dagger.io hosted installer URL is dead).
         const arch = env.arch === "arm64" ? "arm64" : "amd64";
         const platform = env.os === "macos" ? "darwin" : "linux";
         cmd =

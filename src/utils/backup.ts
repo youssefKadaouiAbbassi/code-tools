@@ -4,7 +4,7 @@ import { promises as fs } from "fs";
 import { join, dirname } from "path";
 import { log } from "../utils.js";
 
-export interface BackupManifest {
+export interface FullBackupManifest {
   timestamp: string;
   claudeVersion: string;
   mcpServers: string[];
@@ -19,7 +19,7 @@ export interface BackupManifest {
 export interface BackupResult {
   success: boolean;
   backupPath: string;
-  manifest: BackupManifest;
+  manifest: FullBackupManifest;
   error?: string;
 }
 
@@ -165,7 +165,7 @@ async function copyDirectory(src: string, dest: string): Promise<void> {
   }
 }
 
-async function createManifest(backupPath: string, timestamp: string, targetDir: string): Promise<BackupManifest> {
+async function createManifest(backupPath: string, timestamp: string, targetDir: string): Promise<FullBackupManifest> {
   const claudeBackupDir = join(backupPath, ".claude");
 
   // Detect what was backed up
@@ -452,17 +452,12 @@ async function calculateDirectorySize(dir: string): Promise<number> {
 }
 
 async function detectClaudeVersion(): Promise<string> {
-  try {
-    // Try to detect Claude Code version from various sources
-    const { execSync } = require('child_process');
-    const version = execSync('claude --version', { encoding: 'utf-8', timeout: 5000 });
-    return version.trim();
-  } catch {
-    return 'unknown';
-  }
+  const result = await $`claude --version`.quiet().nothrow();
+  if (result.exitCode !== 0) return 'unknown';
+  return result.text().trim() || 'unknown';
 }
 
-function createEmptyManifest(timestamp: string, targetDir: string): BackupManifest {
+function createEmptyManifest(timestamp: string, targetDir: string): FullBackupManifest {
   return {
     timestamp,
     claudeVersion: 'unknown',

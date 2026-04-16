@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: Run a multi-layered security audit using installed tools. Use when the user asks for a security review, vulnerability scan, audit, or wants to check for injection/XSS/secrets/unsafe patterns. Chains snyk MCP, silent-failure-hunter, security-guidance hooks, and claude-mem prior findings.
+description: Run a multi-layered security audit using installed tools. Use when the user asks for a security review, vulnerability scan, audit, or wants to check for injection/XSS/secrets/unsafe patterns. Chains snyk MCP, silent-failure-hunter, pre-secrets-guard hook findings, and claude-mem prior findings.
 ---
 
 # Security Audit Workflow

@@ -46,8 +46,8 @@ export function resolveClaudeDir(
 
 /**
  * Pure function returning a new env with claudeDir rewritten for the target scope.
- * Other scope-sensitive fields (shellRcPath, homeDir) remain unchanged — --local does
- * not currently redirect shell-rc or home-directory dotfiles per plan scope.
+ * shellRcPath and homeDir stay put: shell rc is user-global by design, and --local
+ * installs skip shell-rc edits + global binary installs (see primordial.ts).
  */
 export function rewriteEnvForScope(
   env: DetectedEnvironment,

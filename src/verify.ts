@@ -44,16 +44,16 @@ export async function verifyMCPServers(
 ): Promise<VerificationResult[]> {
   if (MCP_SERVER_NAMES.length === 0) return [];
 
-  let listed = "";
-  try {
-    listed = await $`claude mcp list`.quiet().nothrow().text();
-  } catch {
+  const result = await $`claude mcp list`.quiet().nothrow();
+  if (result.exitCode !== 0) {
     return MCP_SERVER_NAMES.map((name) => ({
       component: `MCP: ${name}`,
       passed: false,
-      message: "`claude mcp list` failed — is the Claude Code CLI installed?",
+      message: `\`claude mcp list\` exited ${result.exitCode} — Claude CLI issue, not an MCP problem`,
+      details: result.stderr.toString().slice(0, 500) || undefined,
     }));
   }
+  const listed = result.text();
 
   return MCP_SERVER_NAMES.map((name) => {
     const connected = new RegExp(`^${name}:.*✓ Connected`, "m").test(listed);

@@ -18,7 +18,7 @@ Load `karpathy-guidelines`: Think Before Coding · Simplicity First · Surgical 
 
 ## Parallelism rules (enforced throughout)
 
-Agent Teams is enabled (`experimentalAgentTeams: true` in settings.json). Leverage it.
+Agent Teams is enabled (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` set by primordial). Leverage it.
 
 **Hard rule:** if two subagent invocations have no data dependency between them, they MUST be launched in **one message** as multiple parallel Task calls — never sequentially. Sequential spawning when parallelism is possible is a direct 2-5× token and wallclock waste.
 

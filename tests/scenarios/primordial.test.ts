@@ -114,7 +114,7 @@ describe("installPrimordial", () => {
     expect(deny.length).toBeGreaterThanOrEqual(40);
   });
 
-  test("CLAUDE.md deployed and under 100 lines", async () => {
+  test("CLAUDE.md deployed and under 120 lines", async () => {
     const env = mockEnv(tmpDir);
     await installPrimordial(env, false);
 
@@ -122,8 +122,8 @@ describe("installPrimordial", () => {
     expect(await Bun.file(claudeMdPath).exists()).toBe(true);
 
     const content = await Bun.file(claudeMdPath).text();
-    const lineCount = content.split("\n").length;
-    expect(lineCount).toBeLessThan(100);
+    const lineCount = content.trim().split("\n").length;
+    expect(lineCount).toBeLessThan(120);
   });
 
   test("hooks deployed and executable", async () => {

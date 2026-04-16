@@ -73,22 +73,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
     });
   }
 
-  // --- Multica (CLI + self-hosted server) ---
-  //
-  // Uses the upstream `install.sh --with-server` which:
-  //   1. installs the `multica` CLI to $HOME/.local/bin (no sudo)
-  //   2. clones the server repo to $HOME/.multica/server
-  //   3. brings up the docker-compose stack (postgres + backend + frontend)
-  //
-  // We then rewrite the compose env file so the frontend listens on
-  // MULTICA_FRONTEND_PORT (default 3333) instead of the upstream default 3000
-  // (which clashes with generic React dev servers), and run `multica setup
-  // self-host` to point the CLI at the local stack.
-  //
-  // The stdout of `multica setup self-host` includes a browser login URL that
-  // the USER must open to finish authentication — we capture it verbatim and
-  // surface it in the InstallResult message so the installer doesn't "lie" by
-  // claiming done before the human step is taken.
   try {
     const frontendPort = process.env.MULTICA_FRONTEND_PORT ?? "3333";
     const backendPort = process.env.MULTICA_BACKEND_PORT ?? "8080";
@@ -114,9 +98,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
         log.info("multica CLI + server already present, skipping install.sh");
       }
 
-      // Rewrite compose env file to move the frontend off port 3000. The
-      // upstream install.sh writes a fresh .env every run, so re-patching is
-      // idempotent. Keep backend on its default.
       const envExists = await fs.stat(envFile).then(() => true).catch(() => false);
       if (envExists) {
         const raw = await fs.readFile(envFile, "utf-8");
@@ -133,8 +114,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
         }
       }
 
-      // Reconfigure the CLI + capture the auth URL the user must visit.
-      // `yes |` force-confirms the "reset your configuration" prompt.
       const setupOut = await $`sh -c ${`yes | multica setup self-host --port ${backendPort} --frontend-port ${frontendPort}`}`.nothrow().text();
       const loginLine = setupOut.split("\n").find((l) => l.includes("/login?cli_callback="))?.trim() ?? "";
       const alreadyAuthed = /Authenticated as/.test(setupOut);

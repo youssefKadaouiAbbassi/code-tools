@@ -14,7 +14,6 @@ This directory is **the primordial tier** — files here install silently with n
 |------|--------|-------------|
 | `tmux.conf` | `~/.tmux.conf` | Tmux config (C-a prefix, vi mode, mouse on, Tokyo Night palette, Alt-arrow pane nav) |
 | `starship.toml` | `~/.config/starship.toml` | Minimal prompt — dir, git, runtime versions (node/bun/python/rust/go), disables cloud/k8s modules |
-| `statusline.sh` | `~/.config/code-tools/statusline.sh` | Shell function `code_tools_statusline` — sourced by shell rc; prints branch + bun/node version for tmux status |
 
 ## Subdirectories
 
@@ -24,47 +23,47 @@ This directory is **the primordial tier** — files here install silently with n
 | `project-claude/` | `<project>/.claude/` | Project-scope Claude Code config — per-repo overrides and project hooks |
 | `hooks/` | `~/.claude/hooks/` | User-scope hook scripts (PreToolUse, PostToolUse, Notification, Stop) referenced by `home-claude/settings.json` |
 
-### `home-claude/`
+### `home-claude/` — used when installer runs with `--global` (default)
 
-Deployed to the user's home Claude Code directory.
+Deployed to `~/.claude/`.
 
 | File | Contents |
 |------|----------|
 | `CLAUDE.md` | Global advisory rules — research-first workflow, tool guidance, self-improvement loop via `tasks/lessons.md`. Symlinked to `AGENTS.md` + `GEMINI.md` on install for cross-tool portability |
-| `settings.json` | Global permissions deny-list (destructive commands, force pushes, DROP/TRUNCATE, fork bombs, pipe-to-shell), `effortLevel: medium`, `experimentalAgentTeams: true`, telemetry on. Does not set `model` — the user's existing default is preserved |
-| `hooks/` | Empty placeholder — actual user hooks live in `configs/hooks/` and are deployed alongside |
+| `AGENTS.md` | Symlink to `CLAUDE.md` in the repo (mirrors deploy state) |
+| `settings.json` | Global permissions deny-list + `effortLevel: medium`. Claude Code env features (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, telemetry) are set via shell rc env vars, not settings.json. Does not set `model` — the user's existing default is preserved |
 
-### `project-claude/`
+### `project-claude/` — used when installer runs with `--local`
 
-Deployed into each initialized project's `.claude/` directory.
+Deployed to `$PWD/.claude/`. Layers ON TOP of the user's `~/.claude/` at runtime (Claude Code merges both scopes). Only project-specific overlays live here.
 
 | File | Contents |
 |------|----------|
-| `CLAUDE.md` | Project advisory — TS strict, ESLint, Prettier, test co-location, small PRs, `just` + `mise`, `gh` for PRs, feature-folder layout |
-| `settings.json` | Project-scoped permissions deny-list (subset of global), `effortLevel: medium`, `experimentalAgentTeams: true`. Does not set `model`. **Committed to the repo** |
-| `settings.local.json` | Local-only overrides (`model`, `effortLevel`, `permissions.allow/deny`, `experimentalAgentTeams`). **Gitignored** — per-developer tuning. Ships as a documented template with `_overrides` keys |
-| `mcp.json` | MCP server manifest — `serena`, `docfork`, `github` (http + PAT), `context-mode`, `composio` (http + key), `postgres-pro`, `snyk`. Uses `${ENV_VAR}` substitution |
-| `hooks/` | Project-scope hook scripts (see below) |
+| `CLAUDE.md` | Thin template with sections for project stack, conventions, runtime requirements. Users fill these in per-project |
+| `settings.json` | Subset of deny rules — the critical few that apply at project scope. Inherits the rest from user scope |
+| `hooks/` | Project-scope hooks (see below) |
+
+Local installs skip: skills, agents, commands, shell rc edits, global binary installs (tmux/starship/mise/just), git aliases, telemetry env vars, category installers, and `reapplyHardenedSettings`. Run `--global` once to set up the user baseline; `--local` layers per-project.
 
 ### `hooks/` (user-scope)
 
-Shell scripts wired into `home-claude/settings.json`. Every hook reads Claude Code hook JSON from stdin and writes an `{"decision":"allow|block","reason":"..."}` JSON object to stdout.
+Shell scripts wired into user-scope `settings.json` by `installPrimordial` under `--global`. Each hook reads Claude Code hook JSON from stdin. PreToolUse hooks use the current `hookSpecificOutput.permissionDecision` schema to block; advisory hooks emit only to stderr.
 
 | Hook | Event | Role | Blocking? |
 |------|-------|------|-----------|
-| `pre-destructive-blocker.sh` | PreToolUse(Bash) | Blocks `rm -rf /`, force push, `terraform destroy`, `DROP`/`TRUNCATE`, `kill -9`, shutdown, curl-pipe-to-shell, fork bombs, etc. | **Yes** |
-| `pre-secrets-guard.sh` | PreToolUse(any) | Blocks tool input containing AWS/GitHub/Stripe/Anthropic/OpenAI/Slack/npm keys, PEM keys, JWTs, `.env` access, DB URLs with embedded passwords | **Yes** |
-| `post-lint-gate.sh` | PostToolUse(Write\|Edit\|MultiEdit) | Auto-runs eslint/ruff/clippy/go-vet/shellcheck on the edited file; prints advisory to stderr | No (advisory) |
-| `session-start.sh` | SessionStart (Notification) | Prints date, repo, branch, and first 10 lines of `tasks/lessons.md` | No |
-| `session-end.sh` | SessionEnd (Notification) | Appends session metadata to `~/.claude/session-logs/{date}.log` | No |
+| `pre-destructive-blocker.sh` | PreToolUse(Bash) | Blocks regex patterns settings deny can't express — `DROP/TRUNCATE TABLE`, unbounded `DELETE FROM`, `chmod -R 777`, `chown -R`, `mkfs`, `dd if=`, writes to `/dev/sd*`/`/dev/hd*`/`/dev/nvme*`, `git clean -f`-variants, `git checkout -- .`, `eval()`, base64-pipe-sh, fork bombs | **Yes** |
+| `pre-secrets-guard.sh` | PreToolUse(any) | Blocks tool input containing AWS/GitHub/Stripe/Anthropic/OpenAI (legacy + `sk-proj-` + `sk-svcacct-`)/OpenRouter/Groq/xAI/Google/Slack/npm keys, PEM/OpenSSH/EC keys, JWTs, Bash-level `.env` access, DB URLs with embedded passwords. Read-tool `.env` access is blocked by settings.json deny | **Yes** |
+| `post-lint-gate.sh` | PostToolUse(Write\|Edit\|MultiEdit) | Auto-runs eslint/ruff/clippy/go-vet/shellcheck on the edited file. Scoped to files under the current git root; prints advisory to stderr | No (advisory) |
+| `session-start.sh` | SessionStart | Prints banner with date, repo, branch, `tasks/lessons.md` head, and clickable local-tool URLs (multica, claude-mem, ccflare). Emits via `{"systemMessage": …}` so CC renders a visible panel | No |
+| `session-end.sh` | SessionEnd | Appends session metadata to `~/.claude/session-logs/{date}.log`. Purges logs older than 30 days | No |
 | `stop-summary.sh` | Stop | Scans files modified in the last 5 minutes for `console.log`, `debugger`, `TODO`/`FIXME`, `pdb.set_trace`, `binding.pry`, `print()` | No (advisory) |
 
-### `project-claude/hooks/` (project-scope)
+### `project-claude/hooks/` (project-scope, deployed under `--local`)
 
 | Hook | Event | Role |
 |------|-------|------|
-| `post-edit-lint.sh` | PostToolUse(Write\|Edit\|MultiEdit) | Project-scoped lint — restricts to files under git root, runs `tsc --noEmit`, `eslint`, `ruff`, `mypy`, `cargo clippy`, `golangci-lint`, `shellcheck`. Advisory |
-| `post-bash-test.sh` | PostToolUse(Bash) | After a build command (`npm run build`, `cargo build`, `go build`, `tsc`, `just build`, `mvn package`, `gradle build`, etc.), auto-runs the project test suite (`just test` → `bun/npm/yarn test` → `cargo test` → `go test` → `make test`). Advisory |
+| `post-edit-lint.sh` | PostToolUse(Write\|Edit\|MultiEdit) | Project-scoped lint — restricts to files under git root, runs `npx eslint`, `npx tsc --noEmit`, `ruff`, `mypy`, `cargo clippy`, `golangci-lint`, `shellcheck`. Advisory (stderr only) |
+| `post-bash-test.sh` | PostToolUse(Bash) | After a build command (`npm run build`, `cargo build`, `go build`, `tsc`, `just build`, `mvn package`, `gradle build`, etc.), auto-runs the project test suite (`just test` → `bun/npm/yarn test` → `cargo test` → `go test` → `make test`). Advisory (stderr only) |
 
 ## For AI Agents
 
@@ -73,19 +72,18 @@ Shell scripts wired into `home-claude/settings.json`. Every hook reads Claude Co
 - **These are templates, not live config.** Do not edit them expecting your own Claude Code to change — edits here ship to users on their next `bunx @youssefKadaouiAbbassi/code-tools-setup` run.
 - **Hook scripts must stay shellcheck-clean.** CI runs `bun run lint:hooks` against `configs/hooks/*.sh` and `configs/project-claude/hooks/*.sh` (see root `AGENTS.md` > Testing Requirements).
 - **Hooks must exit quickly.** Every hook runs on every matching tool call — slow hooks degrade UX. Keep startup < 100ms; use `command -v` checks, avoid unbounded `find`.
-- **Hook contract is strict.** Read JSON from stdin, write exactly one JSON object `{"decision":"allow"|"block","reason":"..."}` to stdout. Advisory messages go to **stderr**. Never exit non-zero on the allow path.
-- **`.env` access is blocked by `pre-secrets-guard.sh`.** Do not add code that reads `.env` through Claude tools — reference env vars at runtime instead.
-- **Permissions deny-list is duplicated** across `home-claude/settings.json` (broad) and `project-claude/settings.json` (subset) and enforced by `pre-destructive-blocker.sh`. Changes to one should be mirrored to the others where in scope.
-- **JSON files are deep-merged by the installer**, never replaced. When adding a new MCP server to `project-claude/mcp.json`, include only the new entry — existing user entries are preserved (see root `AGENTS.md` rule 3).
+- **Hook contract differs by event.** PreToolUse uses `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"…"}}` to block (the deprecated top-level `{"decision":"block"}` fails CC's validator). PostToolUse / Stop / SessionStart are advisory — emit to **stderr** only; do not emit `{"decision":"allow"}` (obsolete schema, noise). Never exit non-zero on the allow path.
+- **`.env` access is blocked by layered defense**: `settings.json` denies `Read(.env*)` for Claude's Read tool; `pre-secrets-guard.sh` blocks Bash-level access (grep/tail/less/etc.). Do not add code that reads `.env` through Claude tools — reference env vars at runtime instead.
+- **Permissions deny layering:** `home-claude/settings.json` carries literal denies (settings-layer is cheaper, hits before hooks fire). `pre-destructive-blocker.sh` carries only what settings-glob can't express (regex, case-insensitive SQL, fork bombs). Do not re-duplicate a rule in both layers — settings denies fire first and make the hook rule dead code. `project-claude/settings.json` is a minimal overlay for `--local` installs.
+- **JSON files are deep-merged by the installer**, never replaced. `mergeSettings` (in `src/utils.ts`) handles `permissions.deny` as an array union and `mcpServers` as per-key replace.
 
 ### Hard Rules
 
-1. **Never hardcode secrets.** `mcp.json` uses `${DOCFORK_API_KEY}`, `${GITHUB_PAT}`, `${COMPOSIO_API_KEY}`, `${COMPOSIO_MCP_SERVER_ID}` — keep this pattern. The installer does not substitute these; Claude Code does at load time.
-2. **Hook scripts start with `#!/usr/bin/env bash` + `set -euo pipefail`.** No exceptions.
+1. **Never hardcode secrets.** Per-category installers (e.g., `src/components/github.ts`, `src/components/workflow.ts`) register MCP servers via `registerMcp()` with env-var-expanded headers/args. The installer does not substitute `${…}` inside templates; Claude Code resolves them at load time.
+2. **Hook scripts start with `#!/usr/bin/env bash` + `set -euo pipefail`** (except `session-start.sh` and `stop-summary.sh`, which intentionally use `set -u` + `trap ERR` to survive SIGPIPE from `grep|head`). Fail-secure blocking hooks (pre-secrets-guard, pre-destructive-blocker) deny if `jq` is missing; fail-open advisory hooks exit cleanly.
 3. **No interactive prompts in hooks.** They run non-interactively — `read` from stdin yields the hook JSON, nothing else.
 4. **Backward-compatible template changes.** Adding a new permission deny is safe; removing one can re-expose users who relied on it — document in a release note.
-5. **`home-claude/hooks/` is intentionally empty.** Do not move user-scope hook scripts into it; `configs/hooks/` is the canonical location and the installer wires paths through `~/.claude/hooks/`.
-6. **Writer vs Reviewer** (root Principle 7): changes here should be reviewed by `code-reviewer` in a separate pass, not self-approved.
+5. **Writer vs Reviewer** (root Principle 7): changes here should be reviewed by `code-reviewer` in a separate pass, not self-approved.
 
 ## Dependencies
 
@@ -106,19 +104,19 @@ Hooks require these binaries on the target machine — installed by `bootstrap.s
 | `go`, `golangci-lint`, `go vet` | lint hooks | Optional |
 | `bun`, `npm`, `yarn` | `post-bash-test.sh` | Optional (auto-detected) |
 | `just`, `mise` | `post-bash-test.sh` | Optional (auto-detected) |
+| `python3` | `session-start.sh` (JSON escape for systemMessage) | **Yes** |
 
 ### Consumed By
 
-- **`src/primordial.ts`** — copies every file in this tree to the installation targets
+- **`src/primordial.ts`** — copies the scope-appropriate template tree (`home-claude/` for `--global`, `project-claude/` for `--local`). Branching lives in `isLocalScope(env)` / `templateDir(env)`.
 - **`src/verify.ts`** — post-install verification checks presence and permissions of deployed files
 - **`src/backup.ts`** — backs up any existing target files before overwrite
-- Template path resolution uses `new URL("../configs", import.meta.url).pathname` (root `AGENTS.md` rule 7)
+- Template path resolution uses `getConfigsDir()` which returns `join(import.meta.dir, "..", "configs")`.
 
 ### External References
 
-- Claude Code hook protocol — `home-claude/settings.json` `hooks` array points to these scripts
+- Claude Code hook protocol: PreToolUse schema uses `hookSpecificOutput.permissionDecision`
 - Starship config schema — https://starship.rs/config/
 - Tmux options — tmux(1) man page
-- MCP server manifest — Claude Code `.mcp.json` format
 
 <!-- MANUAL: -->

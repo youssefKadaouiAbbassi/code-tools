@@ -49,13 +49,6 @@ export const knowledgeCategory: ComponentCategory = {
   ],
 };
 
-/**
- * Linux Obsidian install: pull the AppImage from obsidianmd/obsidian-releases,
- * drop it in ~/.local/bin/Obsidian.AppImage, chmod +x, and symlink ~/.local/bin/obsidian
- * so `commandExists("obsidian")` returns true.
- *
- * Source: https://obsidian.md/download (AppImage is the first-listed Linux option).
- */
 async function installObsidianAppImage(env: DetectedEnvironment): Promise<{ ok: boolean; message: string }> {
   const arch = env.arch === "arm64" ? "arm64" : "amd64";
   const apiOut = await $`curl -fsSL https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest`.text().catch(() => "");
@@ -66,13 +59,10 @@ async function installObsidianAppImage(env: DetectedEnvironment): Promise<{ ok: 
     version = release.tag_name ?? "unknown";
     const asset = release.assets?.find((a) => {
       if (!a.name.endsWith(".AppImage")) return false;
-      // amd64 AppImage has no arch suffix; arm64 has "-arm64"
       return arch === "arm64" ? a.name.includes("arm64") : !a.name.includes("arm64");
     });
     url = asset?.browser_download_url;
-  } catch {
-    /* fall through */
-  }
+  } catch { }
 
   if (!url) {
     return { ok: false, message: `Could not resolve Obsidian AppImage for ${arch} from GitHub releases API` };
@@ -87,16 +77,13 @@ async function installObsidianAppImage(env: DetectedEnvironment): Promise<{ ok: 
   }
   await $`chmod +x ${target}`.nothrow();
 
-  // Wrapper script so `obsidian` works as a command. --no-sandbox is needed because
-  // modern Ubuntu kernels (with kernel.apparmor_restrict_unprivileged_userns=1) block
-  // Electron's setuid sandbox unless chrome-sandbox is installed setuid root.
-  // The alternative (sudo sysctl) requires admin; --no-sandbox is the no-sudo path.
+  // --no-sandbox: modern Ubuntu kernels block Electron's setuid sandbox unless
+  // chrome-sandbox is installed setuid root; this is the no-sudo path.
   const wrapper = SYMLINK_PATH(env);
   await fs.rm(wrapper, { force: true });
   await Bun.write(wrapper, `#!/bin/sh\nexec "${target}" --no-sandbox "$@"\n`);
   await $`chmod +x ${wrapper}`.nothrow();
 
-  // Desktop entry for app-menu integration
   const desktopDir = join(env.homeDir, ".local", "share", "applications");
   await fs.mkdir(desktopDir, { recursive: true });
   const desktopFile = join(desktopDir, "obsidian.desktop");

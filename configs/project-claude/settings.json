@@ -3,9 +3,8 @@
     "deny": [
       "Bash(rm -rf *)",
       "Bash(git push --force*)",
-      "Bash(git push -f*)",
+      "Bash(git push -f *)",
       "Bash(git reset --hard*)",
-      "Bash(git clean -fd*)",
       "Bash(terraform destroy*)",
       "Bash(terraform apply -auto-approve*)",
       "Bash(kubectl delete namespace*)",
@@ -16,6 +15,5 @@
       "Read(.env.*)"
     ]
   },
-  "effortLevel": "medium",
-  "experimentalAgentTeams": true
+  "effortLevel": "medium"
 }

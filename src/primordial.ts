@@ -14,12 +14,19 @@ import {
 } from "./utils.js";
 import { createBackup, restoreFromPartialManifest } from "./backup.js";
 
-// --- Sub-functions ---
+export function isLocalScope(env: DetectedEnvironment): boolean {
+  const home = env.homeDir.replace(/\/+$/, "");
+  return !env.claudeDir.startsWith(home + "/");
+}
+
+export function templateDir(env: DetectedEnvironment): "home-claude" | "project-claude" {
+  return isLocalScope(env) ? "project-claude" : "home-claude";
+}
 
 async function deploySettings(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "claude-settings";
   const targetPath = join(env.claudeDir, "settings.json");
-  const sourcePath = join(getConfigsDir(), "home-claude", "settings.json");
+  const sourcePath = join(getConfigsDir(), templateDir(env), "settings.json");
 
   if (dryRun) {
     log.info(`[dry-run] Would merge ${sourcePath} into ${targetPath}`);
@@ -44,7 +51,7 @@ async function deploySettings(env: DetectedEnvironment, dryRun: boolean): Promis
 
 async function deployClaudeMd(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "claude-md";
-  const sourcePath = join(getConfigsDir(), "home-claude", "CLAUDE.md");
+  const sourcePath = join(getConfigsDir(), templateDir(env), "CLAUDE.md");
   const targetPath = join(env.claudeDir, "CLAUDE.md");
   const agentsLink = join(env.claudeDir, "AGENTS.md");
   const geminiLink = join(env.claudeDir, "GEMINI.md");
@@ -80,11 +87,6 @@ async function deployClaudeMd(env: DetectedEnvironment, dryRun: boolean): Promis
   }
 }
 
-/**
- * Deploy the orchestration skills from `skills/` into `~/.claude/skills/`.
- * These are custom skills we wrote that reference OUR installed plugins by name
- * (ship-feature, refactor-safely, fix-bug, security-audit, onboard-codebase, dev).
- */
 async function deploySkills(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "orchestration-skills";
   const src = join(getConfigsDir(), "..", "skills");
@@ -117,11 +119,6 @@ async function deploySkills(env: DetectedEnvironment, dryRun: boolean): Promise<
   }
 }
 
-/**
- * Deploy user-level slash commands from `commands/` → `~/.claude/commands/`.
- * Currently ships `/dev` — the top-level orchestrator that drives the full
- * clarify → classify → plan → dispatch → review → record workflow.
- */
 async function deployCommands(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "user-commands";
   const src = join(getConfigsDir(), "..", "commands");
@@ -150,13 +147,6 @@ async function deployCommands(env: DetectedEnvironment, dryRun: boolean): Promis
   }
 }
 
-/**
- * Deploy user-level subagents from `agents/` → `~/.claude/agents/`.
- * These are specialists the /dev orchestrator dispatches to (dev-classifier,
- * dev-clarifier, dev-recorder). Note: the repo's agents/ dir also contains
- * higher-level "role" agents (architect, implementer, etc.) which pre-date
- * this work — we deploy all of them.
- */
 async function deployAgents(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "user-agents";
   const src = join(getConfigsDir(), "..", "agents");
@@ -172,7 +162,6 @@ async function deployAgents(env: DetectedEnvironment, dryRun: boolean): Promise<
     await ensureDir(dst);
     let count = 0;
     for (const f of files) {
-      // Skip AGENTS.md — it's documentation ABOUT the agents, not an agent itself
       if (f.toUpperCase() === "AGENTS.md") continue;
       await copyFile(join(src, f), join(dst, f));
       count++;
@@ -191,12 +180,14 @@ async function deployAgents(env: DetectedEnvironment, dryRun: boolean): Promise<
 
 async function deployHooks(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "claude-hooks";
-  const hooksSourceDir = join(getConfigsDir(), "hooks");
+  const hooksSourceDir = isLocalScope(env)
+    ? join(getConfigsDir(), "project-claude", "hooks")
+    : join(getConfigsDir(), "hooks");
   const hooksTargetDir = join(env.claudeDir, "hooks");
 
   if (dryRun) {
     log.info(`[dry-run] Would copy hook scripts from ${hooksSourceDir} to ${hooksTargetDir} and chmod +x`);
-    return { component, status: "skipped", message: `[dry-run] Would deploy 6 hook scripts`, verifyPassed: false };
+    return { component, status: "skipped", message: `[dry-run] Would deploy hook scripts`, verifyPassed: false };
   }
 
   try {
@@ -214,8 +205,6 @@ async function deployHooks(env: DetectedEnvironment, dryRun: boolean): Promise<I
     }
     await $`chmod 700 ${hooksTargetDir}`.quiet();
 
-    // CRITICAL: also wire each hook into settings.json — without this Claude Code
-    // never invokes them. Bug pre-2026-04-15: hooks were deployed but dormant.
     const settingsPath = join(env.claudeDir, "settings.json");
     const hookFilenames = new Set(hookFiles);
     const cmd = (name: string) => ({ type: "command", command: join(hooksTargetDir, name) });
@@ -234,10 +223,18 @@ async function deployHooks(env: DetectedEnvironment, dryRun: boolean): Promise<I
       }
     }
 
+    const postHooks: Array<{ matcher?: string; hooks: Array<{ type: string; command: string }> }> = [];
     if (hookFilenames.has("post-lint-gate.sh")) {
-      hooksConfig.PostToolUse = [
-        { matcher: "Write|Edit|MultiEdit", hooks: [cmd("post-lint-gate.sh")] },
-      ];
+      postHooks.push({ matcher: "Write|Edit|MultiEdit", hooks: [cmd("post-lint-gate.sh")] });
+    }
+    if (hookFilenames.has("post-edit-lint.sh")) {
+      postHooks.push({ matcher: "Write|Edit|MultiEdit", hooks: [cmd("post-edit-lint.sh")] });
+    }
+    if (hookFilenames.has("post-bash-test.sh")) {
+      postHooks.push({ matcher: "Bash", hooks: [cmd("post-bash-test.sh")] });
+    }
+    if (postHooks.length > 0) {
+      hooksConfig.PostToolUse = postHooks;
     }
 
     if (hookFilenames.has("session-start.sh")) {
@@ -362,38 +359,6 @@ async function installStarship(env: DetectedEnvironment, dryRun: boolean): Promi
   return { ...binResult, component };
 }
 
-async function deployStatusline(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
-  const component = "statusline";
-  const sourcePath = join(getConfigsDir(), "statusline.sh");
-  const targetPath = join(env.claudeDir, "statusline.sh");
-
-  if (dryRun) {
-    log.info(`[dry-run] Would copy ${sourcePath} -> ${targetPath} and chmod +x`);
-    return { component, status: "skipped", message: `[dry-run] Would deploy statusline.sh`, verifyPassed: false };
-  }
-
-  try {
-    await ensureDir(env.claudeDir);
-    await copyFile(sourcePath, targetPath);
-    await $`chmod +x ${targetPath}`.quiet();
-    log.success(`Deployed statusline.sh to ${targetPath}`);
-    return { component, status: "installed", message: `statusline.sh deployed and made executable`, verifyPassed: true };
-  } catch (error) {
-    return {
-      component,
-      status: "failed",
-      message: `Failed to deploy statusline: ${error instanceof Error ? error.message : String(error)}`,
-      verifyPassed: false,
-    };
-  }
-}
-
-// `deployBasicMcpConfig` removed 2026-04-15.
-// Was writing wrong package names (`github-mcp`, `snyk-mcp`, `composio-mcp` — none exist on npm)
-// and a stale `postgres` key that duplicated `postgres-mcp-pro` from database.ts.
-// Each category installer now owns its own MCP registration with the correct package
-// names and protocol (http vs stdio).
-
 async function installMise(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "mise";
 
@@ -436,7 +401,7 @@ async function installJust(env: DetectedEnvironment, dryRun: boolean): Promise<I
   );
 }
 
-async function addGitAliases(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+async function addGitAliases(_env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "git-aliases";
   const aliases: Array<[string, string]> = [
     ["wt", "worktree"],
@@ -496,9 +461,6 @@ async function enableTelemetry(env: DetectedEnvironment, dryRun: boolean): Promi
 
 async function setCavemanDefaultMode(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "caveman-default-mode";
-  // Caveman plugin reads CAVEMAN_DEFAULT_MODE at SessionStart. Setting `full` here
-  // makes terse output the default for new shells, ~65% output token reduction
-  // (per their benchmarks). Override with `lite`/`ultra`/`off` per session as needed.
   const lines = ["export CAVEMAN_DEFAULT_MODE=full"];
 
   if (dryRun) {
@@ -520,7 +482,7 @@ async function setCavemanDefaultMode(env: DetectedEnvironment, dryRun: boolean):
   }
 }
 
-async function createLessons(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
+async function createLessons(_env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "lessons";
   const lessonsPath = join(process.cwd(), "tasks", "lessons.md");
 
@@ -551,13 +513,17 @@ async function createLessons(env: DetectedEnvironment, dryRun: boolean): Promise
 // --- Main export ---
 
 export async function installPrimordial(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
-  const backupPaths = [
-    join(env.claudeDir, "settings.json"),
-    join(env.claudeDir, "CLAUDE.md"),
-    join(env.homeDir, ".tmux.conf"),
-    join(env.homeDir, ".config", "starship.toml"),
-    env.shellRcPath,
-  ];
+  const local = isLocalScope(env);
+
+  const backupPaths = local
+    ? [join(env.claudeDir, "settings.json"), join(env.claudeDir, "CLAUDE.md")]
+    : [
+        join(env.claudeDir, "settings.json"),
+        join(env.claudeDir, "CLAUDE.md"),
+        join(env.homeDir, ".tmux.conf"),
+        join(env.homeDir, ".config", "starship.toml"),
+        env.shellRcPath,
+      ];
 
   const backup = await createBackup(backupPaths);
   const results: InstallResult[] = [];
@@ -566,19 +532,19 @@ export async function installPrimordial(env: DetectedEnvironment, dryRun: boolea
     results.push(await deploySettings(env, dryRun));
     results.push(await deployClaudeMd(env, dryRun));
     results.push(await deployHooks(env, dryRun));
-    results.push(await deploySkills(env, dryRun));
-    results.push(await deployCommands(env, dryRun));
-    results.push(await deployAgents(env, dryRun));
-    // (basic MCP config removed — each category installer now registers its own MCP)
-    results.push(await installJq(env, dryRun));
-    results.push(await installTmux(env, dryRun));
-    results.push(await installStarship(env, dryRun));
-    results.push(await deployStatusline(env, dryRun));
-    results.push(await installMise(env, dryRun));
-    results.push(await installJust(env, dryRun));
-    results.push(await addGitAliases(env, dryRun));
-    results.push(await enableTelemetry(env, dryRun));
-    results.push(await setCavemanDefaultMode(env, dryRun));
+    if (!local) {
+      results.push(await deploySkills(env, dryRun));
+      results.push(await deployCommands(env, dryRun));
+      results.push(await deployAgents(env, dryRun));
+      results.push(await installJq(env, dryRun));
+      results.push(await installTmux(env, dryRun));
+      results.push(await installStarship(env, dryRun));
+      results.push(await installMise(env, dryRun));
+      results.push(await installJust(env, dryRun));
+      results.push(await addGitAliases(env, dryRun));
+      results.push(await enableTelemetry(env, dryRun));
+      results.push(await setCavemanDefaultMode(env, dryRun));
+    }
     results.push(await createLessons(env, dryRun));
     return results;
   } catch (error) {

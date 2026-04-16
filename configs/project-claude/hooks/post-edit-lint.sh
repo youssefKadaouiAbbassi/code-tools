@@ -1,40 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# PostToolUse hook: project-scoped lint after file edits.
-# Only runs on files within the current project (git worktree root).
-# Advisory only — does not block.
-
-# Fail-open: advisory hook, allow tool through if jq is missing.
 if ! command -v jq >/dev/null 2>&1; then
-  printf '{"decision":"allow"}\n'
   exit 0
 fi
 
 input="$(cat)"
-
 tool_name="$(printf '%s' "$input" | jq -r '.tool_name // empty')"
 
 case "$tool_name" in
   Write|Edit|MultiEdit) ;;
-  *) printf '{"decision":"allow"}\n'; exit 0 ;;
+  *) exit 0 ;;
 esac
 
 file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.path // empty')"
-
 if [[ -z "$file_path" ]] || [[ ! -f "$file_path" ]]; then
-  printf '{"decision":"allow"}\n'
   exit 0
 fi
 
-# Resolve to absolute path
 file_path="$(realpath "$file_path" 2>/dev/null || printf '%s' "$file_path")"
-
-# Scope check: only lint files inside the current project
 project_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 case "$file_path" in
   "$project_root"/*) ;;
-  *) printf '{"decision":"allow"}\n'; exit 0 ;;
+  *) exit 0 ;;
 esac
 
 ext="${file_path##*.}"
@@ -82,8 +70,6 @@ case "$ext" in
   sh|bash)
     advisory_lint shellcheck "$file_path"
     ;;
-  *)
-    ;;
 esac
 
-printf '{"decision":"allow"}\n'
+exit 0

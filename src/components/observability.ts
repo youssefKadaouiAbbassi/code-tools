@@ -64,15 +64,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
     });
   }
 
-  // --- ccflare (upstream: snipeship/ccflare — git+bun, no npm package) ---
-  //
-  // Two npm packages carry the name `ccflare` / `better-ccflare` but neither
-  // tracks the real repo (0.0.2 placeholder from 8 months ago). The live TUI
-  // lives at github.com/snipeship/ccflare and must be cloned + built with bun.
-  //
-  // Port 8080 is ccflare's upstream default, which clashes with multica's
-  // backend. Launcher script sets CCFLARE_PORT=8787 by default; user can
-  // override via env.
   try {
     const { join } = await import("node:path");
     const { promises: fs } = await import("node:fs");
@@ -110,23 +101,15 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       }
       await $`sh -c ${`cd "${repoDir}" && bun install && bun run build`}`.nothrow();
 
-      // Resolve bun's absolute path so the systemd unit works under a
-      // non-login shell (systemd --user doesn't source .bashrc).
       const bunPath = (await $`sh -c "command -v bun"`.nothrow().text()).trim() || "bun";
 
       await fs.mkdir(join(env.homeDir, ".local", "bin"), { recursive: true });
       const script = `#!/usr/bin/env bash
-# ccflare launcher — TUI + proxy server. Defaults to port 8787 so it doesn't
-# clash with multica's backend on 8080. Override via CCFLARE_PORT=<N>.
-# bun path is baked in at install time for systemd-unit compatibility.
 cd "$HOME/.ccflare" && exec "${bunPath}" run apps/tui/src/main.ts --port "\${CCFLARE_PORT:-8787}" "$@"
 `;
       await fs.writeFile(launcher, script);
       await $`chmod +x ${launcher}`.nothrow();
 
-      // systemd user unit — auto-start ccflare in headless proxy+dashboard
-      // mode (`--serve`). Without this the hook's clickable URL goes to a
-      // closed port on reboot.
       if (env.os === "linux" && commandExists("systemctl")) {
         const unitDir = join(env.homeDir, ".config", "systemd", "user");
         await fs.mkdir(unitDir, { recursive: true });

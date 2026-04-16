@@ -46,4 +46,6 @@ fi
 
 printf 'Session logged to %s\n' "$log_file" >&2
 
+find "$log_dir" -type f -name '*.log' -mtime +30 -delete 2>/dev/null || true
+
 exit 0

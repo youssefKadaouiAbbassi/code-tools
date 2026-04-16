@@ -1,37 +1,29 @@
 ---
 name: setup
-description: Install the Ultimate Claude Code System v12 — 40 components, 7 MCP servers, 12 principles
-command: /setup
+description: Install or update the Ultimate Claude Code System. Use when the user asks to set up, install, bootstrap, or reinstall the code-tools harness (hooks, MCP servers, skills, plugins, shell rc).
 ---
 
 # Setup Skill
 
-Launches the interactive CLI installer for the Ultimate Claude Code System v12.
+Launches the `code-tools-setup` CLI installer.
 
 ## Usage
 
-Run `/setup` to start the interactive installer. It will:
+Run `bunx @youssefKadaouiAbbassi/code-tools-setup` (or `bun run bin/setup.ts` from this repo).
 
-1. Scan your environment (OS, shell, package manager, existing tools)
-2. Install the primordial core (settings.json, CLAUDE.md, hooks, tmux, starship, mise, just)
-3. Let you choose additional categories (Code Intelligence, Browser+Web, Memory, Security, etc.)
-4. Verify everything is installed correctly
-5. Show a summary
+What it does:
+
+1. Scans the environment (OS, shell, package manager, existing tools)
+2. Asks scope (global `~/.claude/` or local `./.claude/`) + install mode (clean / add-on-top / fresh)
+3. Installs primordial core (settings.json, CLAUDE.md, hooks, tmux, starship, mise, just, etc.)
+4. Prompts for categories (Code Intelligence, Browser+Web, Memory, Security, Workstation, …)
+5. Verifies every component and reports a summary
 
 ## Flags
 
-- `--non-interactive` — Skip prompts, install everything with defaults
-- `--tier primordial|recommended|all` — Install a specific tier
-- `--dry-run` — Show what would change without modifying the filesystem
-
-## Running
-
-```bash
-bun run bin/setup.ts
-```
-
-Or after npm publish:
-
-```bash
-bunx @youssefKadaouiAbbassi/code-tools-setup
-```
+- `--global` / `--local` — scope
+- `--clean-install` / `--add-on-top` — mode (requires `--yes-wipe` for clean in non-interactive)
+- `--tier primordial|recommended|all` — tier
+- `--non-interactive` — skip prompts
+- `--dry-run` — preview without writing
+- `--verbose` — verbose output

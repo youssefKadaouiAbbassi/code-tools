@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import * as clack from "@clack/prompts";
 import pc from "picocolors";
 import { detectEnvironment } from "../detect.js";
-import { installPrimordial } from "../primordial.js";
+import { installPrimordial, isLocalScope } from "../primordial.js";
 import { verifyAll } from "../verify.js";
 import {
   RECOMMENDED_CATEGORIES,
@@ -21,19 +21,16 @@ import {
   getSecretsFilePath,
   appendToShellRc,
 } from "../utils.js";
-import { createFullBackup, performCleanInstall, restoreFromBackup } from "../utils/backup.js";
-import { resolveInstallMode, type ResolvedInstallMode } from "../install-mode.js";
+import { performCleanInstall, restoreFromBackup } from "../utils/backup.js";
+import { resolveInstallMode } from "../install-mode.js";
 import { rollbackAddOnTop } from "../add-on-top.js";
 import type { DetectedEnvironment, InstallResult, ComponentCategory } from "../types.js";
 
-/**
- * Some third-party installers (e.g. claude-mem) replace `permissions.deny` in
- * settings.json with their own minimal set. Re-merge our hardened deny rules
- * on top after all category installs so our security posture is preserved.
- */
+// Third-party installers can overwrite permissions.deny; re-apply ours last.
 async function reapplyHardenedSettings(env: DetectedEnvironment, dryRun: boolean): Promise<void> {
   if (dryRun) return;
-  const sourcePath = join(getConfigsDir(), "home-claude", "settings.json");
+  const scope = env.claudeDir.startsWith(env.homeDir + "/") ? "home-claude" : "project-claude";
+  const sourcePath = join(getConfigsDir(), scope, "settings.json");
   const targetPath = join(env.claudeDir, "settings.json");
   try {
     const patch = await Bun.file(sourcePath).json() as Record<string, unknown>;
@@ -108,6 +105,20 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
   log.info("Installing primordial core (you may be prompted for sudo)...");
   const primordialResults = await installPrimordial(env, dryRun);
   log.success("Primordial core step complete");
+
+  if (isLocalScope(env)) {
+    const report = await verifyAll(env, primordialResults);
+    clack.note(
+      `Project-scope install complete in ${env.claudeDir}.\nCategory installers skipped — MCPs/binaries belong at user scope.\nRun without --local to install those globally.`,
+      "Local install complete",
+    );
+    clack.note(
+      `Verification: ${pc.green(String(report.passed))} passed, ${report.failed > 0 ? pc.red(String(report.failed)) : pc.dim("0")} failed`,
+      "Summary",
+    );
+    clack.outro(pc.bold("Setup complete!"));
+    return;
+  }
 
   // --- 5. Two-section batch choice flow ---
   const selectedCategories: ComponentCategory[] = [];
@@ -406,38 +417,40 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
   );
 }
 
-async function runNonInteractive(dryRun: boolean, tier?: string, envOverride?: DetectedEnvironment): Promise<void> {
-  const tierText = tier ? ` (${tier} tier)` : " — installing everything";
-  log.info(`Running in non-interactive mode${tierText}`);
+function pickCategories(tier?: string): ComponentCategory[] {
+  if (tier === "recommended") return RECOMMENDED_CATEGORIES;
+  if (tier === "all" || !tier) return ALL_CATEGORIES;
+  return [];
+}
 
-  const env = envOverride ?? await detectEnvironment();
+async function runBatch(
+  env: DetectedEnvironment,
+  dryRun: boolean,
+  tier: string | undefined,
+  verbose: boolean,
+): Promise<void> {
+  log.info(`Tier: ${tier ?? "all"}, dry-run: ${dryRun}`);
   log.info(`OS: ${env.os} (${env.arch}), shell: ${env.shell}, pkg: ${env.packageManager}`);
 
   const primordialResults = await installPrimordial(env, dryRun);
-
-  if (tier === "primordial") {
-    log.info("Primordial tier complete.");
+  if (tier === "primordial" || isLocalScope(env)) {
+    if (isLocalScope(env)) log.info("Local install complete (category installers skipped — they're user-global).");
+    else log.info("Primordial tier complete.");
+    const report = await verifyAll(env, primordialResults);
+    log.info(`Verification: ${report.passed} passed, ${report.failed} failed, ${report.skipped} skipped`);
     return;
   }
 
-  const categories: ComponentCategory[] = tier === "recommended"
-    ? RECOMMENDED_CATEGORIES
-    : tier === "all" || !tier
-    ? ALL_CATEGORIES
-    : [];
-
   const allResults = [...primordialResults];
-
-  for (const cat of categories) {
+  for (const cat of pickCategories(tier)) {
     log.info(`Installing category: ${cat.name}`);
     try {
       const results = await installCategory(cat, env, dryRun, new Set());
       allResults.push(...results);
-      for (const r of results) {
-        if (r.status === "failed") {
-          log.error(`  FAILED: ${r.component} — ${r.message}`);
-        } else {
-          log.success(`  ${r.component}: ${r.message}`);
+      if (verbose) {
+        for (const r of results) {
+          if (r.status === "failed") log.error(`  FAILED: ${r.component} — ${r.message}`);
+          else log.success(`  ${r.component}: ${r.message}`);
         }
       }
     } catch (err) {
@@ -446,41 +459,8 @@ async function runNonInteractive(dryRun: boolean, tier?: string, envOverride?: D
   }
 
   await reapplyHardenedSettings(env, dryRun);
-
   const report = await verifyAll(env, allResults);
   log.info(`Verification: ${report.passed} passed, ${report.failed} failed, ${report.skipped} skipped`);
-}
-
-async function runTier(tier: string, dryRun: boolean, envOverride?: DetectedEnvironment): Promise<void> {
-  const env = envOverride ?? await detectEnvironment();
-  log.info(`Tier: ${tier}, dry-run: ${dryRun}`);
-
-  const primordialResults = await installPrimordial(env, dryRun);
-
-  if (tier === "primordial") {
-    log.info("Primordial tier complete.");
-    return;
-  }
-
-  const categories: ComponentCategory[] =
-    tier === "recommended" ? RECOMMENDED_CATEGORIES : ALL_CATEGORIES;
-
-  const allResults = [...primordialResults];
-
-  for (const cat of categories) {
-    log.info(`Installing category: ${cat.name}`);
-    try {
-      const results = await installCategory(cat, env, dryRun, new Set());
-      allResults.push(...results);
-    } catch (err) {
-      log.error(`Category ${cat.name} threw: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  await reapplyHardenedSettings(env, dryRun);
-
-  const report = await verifyAll(env, allResults);
-  log.info(`Done. ${report.passed} passed, ${report.failed} failed.`);
 }
 
 export default defineCommand({
@@ -551,7 +531,8 @@ export default defineCommand({
 
     // --- Resolve install mode + scope (Phase 2 orchestrator) ---
     const env = await detectEnvironment();
-    const interactive = !args["non-interactive"];
+    // No-TTY stdin (CI, pipes, tests) means prompts would hang. Treat as non-interactive.
+    const interactive = !args["non-interactive"] && process.stdin.isTTY === true;
 
     const resolved = await resolveInstallMode(
       {
@@ -573,13 +554,8 @@ export default defineCommand({
         await performCleanInstall(resolved.resolvedEnv.claudeDir);
       }
 
-      if (args["non-interactive"]) {
-        await runNonInteractive(dryRun, args.tier, resolved.resolvedEnv);
-        return;
-      }
-
-      if (args.tier) {
-        await runTier(args.tier, dryRun, resolved.resolvedEnv);
+      if (!interactive || args.tier) {
+        await runBatch(resolved.resolvedEnv, dryRun, args.tier, Boolean(args["non-interactive"]));
         return;
       }
 

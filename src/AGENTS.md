@@ -13,20 +13,22 @@ Parent spec: [`../AGENTS.md`](../AGENTS.md) — stack decisions, tier model, and
 | File | Role |
 |------|------|
 | `types.ts` | Single source of truth for type definitions: `DetectedEnvironment`, `InstallPackage`, `InstallResult`, `Component`, `ComponentCategory`, `MCPServerConfig`, `ConfigDeployment`, `BackupManifest`, `VerificationResult`, `VerificationReport`, plus the `OS`, `Shell`, `PackageManager`, `LinuxDistro`, `Tier`, `InstallStatus` unions. No runtime code. |
-| `utils.ts` | Shared helpers — `commandExists`, `getCommandVersion`, JSON I/O (`readJson`/`writeJson`/`mergeJsonFile`), file ops (`copyFile`/`copyDir`/`ensureDir`/`fileExists`), `getConfigsDir`, the `mergeSettings` strategy-aware `deepmerge-ts` customizer, `appendToShellRc` (guarded by the `# code-tools-managed` marker), `installBinary` (OS-adaptive package-manager dispatch), and the `log` picocolors logger. |
+| `utils.ts` | Shared helpers — `commandExists`, `getPythonCommand`/`tryGetPythonCommand`, `getCommandVersion`, JSON I/O (`readJson`/`writeJson`/`mergeJsonFile`), file ops (`copyFile`/`copyDir`/`ensureDir`/`fileExists`), `getConfigsDir`, the `mergeSettings` strategy-aware `deepmerge-ts` customizer, `appendToShellRc` (guarded by the `# code-tools-managed` marker), `installBinary` (OS-adaptive package-manager dispatch), `registerMcp` (verified), secrets file I/O (`getSecretsFilePath`/`loadSecretsFromFile`/`saveSecretsToFile`), `promptForMissingEnvVars`, and the `log` picocolors logger. |
 | `detect.ts` | Environment detection — `detectOS`, `detectShell`, `detectPackageManager`, `detectLinuxDistro`, `detectExistingTools`, `detectClaudeCode`, `detectDocker`, and the composite `detectEnvironment()` that returns a fully populated `DetectedEnvironment`. |
 | `backup.ts` | Timestamped backup subsystem writing to `~/.claude-backup/{YYYYMMDD-HHMMSS}/`. Exports `createBackup`, `backupIfExists`, `listBackups`, `getLatestBackup`, `restoreFromBackup`. Each backup dir has a `manifest.json` listing original/backup paths. |
-| `primordial.ts` | The always-on Tier 0 installer. Backs up the target paths, then deploys `settings.json` (merged), `CLAUDE.md` + `AGENTS.md`/`GEMINI.md` symlinks, hook scripts (`chmod 700`), `jq`, `tmux` + `.tmux.conf`, `starship` + `starship.toml` + shell-rc eval, `statusline.sh`, `mise` + shell-rc eval, `just`, four `git worktree` aliases, telemetry env vars, and `tasks/lessons.md` (never overwritten). Rolls back via `restoreFromBackup` on failure. |
+| `primordial.ts` | The always-on Tier 0 installer. Backs up the target paths, then deploys `settings.json` (merged), `CLAUDE.md` + `AGENTS.md`/`GEMINI.md` symlinks, hook scripts (`chmod 700`), `jq`, `tmux` + `.tmux.conf`, `starship` + `starship.toml` + shell-rc eval, `mise` + shell-rc eval, `just`, four `git worktree` aliases, telemetry env vars, and `tasks/lessons.md` (never overwritten). Rolls back via `restoreFromPartialManifest` on failure. |
 | `verify.ts` | Post-install verification. `verifyComponent` runs a component's `verifyCommand`, `verifyMCPServers` checks the expected names exist in `settings.json`, `verifyHooks` stats each hook file for the executable bit, `verifySettings` asserts `permissions.deny` has 30+ entries, and `verifyAll` composes a `VerificationReport`. |
-| `status.ts` | Formatted status output — `formatStatusTable` renders a padded colored table of `VerificationResult`s, `showStatus` prints per-category installed/missing indicators using `env.existingTools`. |
-| `restore.ts` | Interactive restore flow built on `@clack/prompts` — `listAvailableBackups`, `confirmRestore`, `runRestore(backupPath?)` which either takes a direct timestamp or lets the user pick from the `select` prompt. |
+| `restore.ts` | Interactive restore flow built on `@clack/prompts` — `listAvailableBackups`, `confirmRestore`, `runRestore(backupPath?)` which either takes a direct timestamp or lets the user pick from the `select` prompt. Handles legacy per-file backups (`~/.claude-backup/<ts>/`) and full-tree backups (`~/.claude-backup-<ts>/`). |
+| `install-mode.ts` | Owner of scope (`--global`/`--local`) and install-mode (`clean` / `add-on-top` / `fresh`) resolution. Creates full-tree backup on clean-install, writelog dir on add-on-top. |
+| `add-on-top.ts` | Append-only JSONL writelog for add-on-top installs. `logCreate` / `logOverwrite` / `logMerge` / `logSkip` during install; `rollbackAddOnTop` replays in reverse on failure. |
+| `utils/backup.ts` | Full-tree backup/restore. `createFullBackup`, `performCleanInstall`, `restoreFromBackup`. Exports `FullBackupManifest` type (distinct from the per-file `BackupManifest` in `types.ts`). |
 
 ## Subdirectories
 
 | Directory | Contents |
 |-----------|----------|
 | `commands/` | `citty` command adapters wired into `bin/setup.ts`: `setup.ts` (interactive + `--non-interactive` + `--dry-run` flows), `status.ts`, `restore.ts`. These are the only things `bin/` imports; they call into the modules above. |
-| `components/` | 14 category installer modules (`browser-web`, `code-intel`, `database`, `design`, `github`, `knowledge`, `memory-context`, `ml-research`, `notifications`, `observability`, `orchestration`, `security`, `workflow`, `workstation`) plus the `index.ts` barrel that exports `RECOMMENDED_CATEGORIES`, `OPTIONAL_CATEGORIES`, `ALL_CATEGORIES`, and `installCategory`. See [`components/AGENTS.md`](components/AGENTS.md) for the per-module contract. |
+| `components/` | 13 category installer modules (`browser-web`, `cc-plugins`, `code-intel`, `design`, `github`, `knowledge`, `memory-context`, `observability`, `orchestration`, `security`, `skills-registry`, `workflow`, `workstation`) plus the `index.ts` barrel that exports `RECOMMENDED_CATEGORIES`, `OPTIONAL_CATEGORIES`, `ALL_CATEGORIES`, and `installCategory`. See [`components/AGENTS.md`](components/AGENTS.md) for the per-module contract. |
 
 ## Module Graph
 
@@ -34,12 +36,14 @@ Parent spec: [`../AGENTS.md`](../AGENTS.md) — stack decisions, tier model, and
 bin/setup.ts
   └─ src/commands/{setup,status,restore}.ts
         ├─ src/detect.ts          ──┐
+        ├─ src/install-mode.ts  ────┤
         ├─ src/primordial.ts ─┐     │
         │    ├─ src/backup.ts ┴─┐   │
         │    └─ src/utils.ts ───┼───┤
         ├─ src/components/*  ───┤   │
         ├─ src/verify.ts    ────┤   │
-        ├─ src/status.ts    ────┤   │
+        ├─ src/add-on-top.ts ───┤   │
+        ├─ src/utils/backup.ts ─┤   │
         └─ src/restore.ts   ────┘   │
                                     │
                     src/types.ts ←──┘   (imported by all modules via import type)
@@ -65,9 +69,9 @@ Every module imports types with `import type { ... } from "./types.js"`. The `.j
 
 ### Hard Rules (From Parent AGENTS.md, Enforced Here)
 
-- **Backup before overwrite.** `primordial.ts` calls `createBackup(paths)` before the first deploy and `restoreFromBackup(backup)` in the `catch`. Any new primordial step must add its target path to the `backupPaths` array on line ~375.
+- **Backup before overwrite.** `primordial.ts` calls `createBackup(paths)` before the first deploy and `restoreFromPartialManifest(backup)` in the `catch`. Any new primordial step must add its target path to the `backupPaths` array in `installPrimordial`.
 - **`tasks/lessons.md` is append-only.** `createLessons()` returns `already-installed` without touching an existing file. Do not change this.
-- **Verify every component.** Any new `Component` in `components/*.ts` must set a working `verifyCommand` — `verify.ts:verifyComponent` invokes it via `sh -c`. Add an MCP name to `MCP_SERVER_NAMES` in `verify.ts` when registering a new MCP server.
+- **Verify every component.** Any new `Component` in `components/*.ts` must set a working `verifyCommand` — `verify.ts:verifyComponent` invokes it via `sh -c`. Per-component MCP registration is owned by the installer (via `registerMcp`), which now verifies the server appears in `claude mcp list` before returning `true`.
 - **Hook scripts get `chmod 700`**, not `+x`. See `primordial.ts:deployHooks`. `verify.ts:verifyHooks` checks the executable bit across `0o111`.
 - **Writer / Reviewer separation.** Author changes in this directory in one pass; hand verification and approval to `code-reviewer` / `verifier` in a separate lane. Do not self-approve.
 

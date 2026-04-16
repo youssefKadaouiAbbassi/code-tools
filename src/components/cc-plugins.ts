@@ -1,12 +1,3 @@
-/**
- * Official Anthropic Claude Code plugins from the `claude-plugins-official` marketplace.
- *
- * Installs all plugins that move the needle on day-to-day coding (workflow, review,
- * commit/PR, security, meta-config) plus all 12 LSP plugins. Skips plugin-author
- * tooling (agent-sdk-dev, plugin-dev, example-plugin) and niche items (math-olympiad)
- * which the user can `claude plugin install <name>@claude-plugins-official` manually
- * if they ever need them.
- */
 import { $ } from "bun";
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
@@ -16,19 +7,8 @@ import { commandExists, log } from "../utils.js";
 const MARKETPLACE_SLUG = "anthropics/claude-plugins-official";
 const MARKETPLACE_NAME = "claude-plugins-official";
 
-// Third-party marketplaces we also install from. Each entry:
-//   { slug: "owner/repo", marketplaceName: "<as Claude CLI knows it>", plugins: [names…] }
-// The marketplace name is what `claude plugin marketplace list` reports — usually
-// the repo name, but sometimes different. We resolve it via marketplace.json after adding.
-// karpathy-guidelines + caveman moved to skills.sh (see skills-registry.ts).
-// Reason: skills.sh hosts them as plain skills with `npx skills update` for
-// auto-refresh, whereas the Claude Code plugin system requires full marketplace
-// reinstall cycles on every upstream bump. No more plugin-scope imports for
-// third-party skills; custom skills live in `skills/` (shipped as-is), all
-// other community skills come from skills.sh.
 const EXTRA_MARKETPLACES: Array<{ slug: string; marketplaceName: string; plugins: string[] }> = [];
 
-// Tier 1 — coding workflow, review, security, git, meta-config, output styles, prototyping.
 const CORE_PLUGINS = [
   "feature-dev",
   "code-review",
@@ -37,34 +17,13 @@ const CORE_PLUGINS = [
   "commit-commands",
   "claude-code-setup",
   "claude-md-management",
-  // "security-guidance" removed 2026-04-15 — its hook leaks Anthropic-internal advice
-  // (references a private helper that only exists in their codebase) as false positives
-  // on common JS/TS patterns. Our own hooks cover real security.
-  //
-  // "ralph-loop" + "hookify" removed 2026-04-15 — both register Stop hooks that fire
-  // on every session exit even when the plugin has zero rules configured. Added noise
-  // ("Ran 4 stop hooks... Failed with non-blocking status code") without any active
-  // workflow leveraging them. Re-install on demand if you start using either:
-  //   claude plugin install ralph-loop@claude-plugins-official
-  //   claude plugin install hookify@claude-plugins-official
   "frontend-design",
   "playground",
-  // "explanatory-output-style" + "learning-output-style" removed 2026-04-15 — they
-  // conflict with `caveman` (terse mode is the default; their always-on verbose
-  // directives cancel caveman's savings). Re-install on demand if you want them
-  // for a session: `claude plugin install <name>@claude-plugins-official`.
   "skill-creator",
 ];
 
-// LSP plugins from claude-plugins-official are STUBS as of 2026-04-15 — each
-// just contains a LICENSE + README that documents how to install the underlying
-// language server binary. They have NO `.claude-plugin/plugin.json` and provide
-// zero integration code. Installing them clutters `claude plugin list` and can
-// surface "lsp for X failed" errors when CC tries to invoke a non-existent server.
-//
-// Strategy: skip the stubs entirely. We auto-install the real LSP binaries for
-// languages we can detect on the user's machine (see `installRealLspBinaries`
-// below). Re-evaluate this decision when Anthropic ships actual integration.
+// LSP plugins from claude-plugins-official are stubs without plugin.json;
+// we install the real language-server binaries directly (see installRealLspBinaries).
 const LSP_PLUGINS: string[] = [];
 
 const ALL_PLUGINS = [...CORE_PLUGINS, ...LSP_PLUGINS];
@@ -102,7 +61,7 @@ export const ccPluginsCategory: ComponentCategory = {
 };
 
 async function loadInstalledPlugins(env: DetectedEnvironment): Promise<Set<string>> {
-  const path = join(env.homeDir, ".claude", "plugins", "installed_plugins.json");
+  const path = join(env.claudeDir, "plugins", "installed_plugins.json");
   try {
     const data = JSON.parse(await fs.readFile(path, "utf-8")) as { plugins?: Record<string, unknown> };
     // Keys look like "feature-dev@claude-plugins-official"
@@ -112,15 +71,6 @@ async function loadInstalledPlugins(env: DetectedEnvironment): Promise<Set<strin
   }
 }
 
-/**
- * Install the actual language-server binaries for languages we can detect on
- * disk. The `*-lsp` plugins from Anthropic are stubs that don't ship the binary —
- * we have to do it ourselves for the LSP tool inside Claude Code to work.
- *
- * Detection is conservative: we only install LSPs for runtimes the user clearly
- * uses (bun/node, python3, rustc, go). Skipped languages can be installed later
- * by re-running setup once the runtime is on disk.
- */
 async function installRealLspBinaries(_env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
   const out: InstallResult[] = [];
 
@@ -194,7 +144,7 @@ async function installRealLspBinaries(_env: DetectedEnvironment, dryRun: boolean
 }
 
 async function marketplaceRegistered(env: DetectedEnvironment): Promise<boolean> {
-  const path = join(env.homeDir, ".claude", "plugins", "known_marketplaces.json");
+  const path = join(env.claudeDir, "plugins", "known_marketplaces.json");
   try {
     const text = await fs.readFile(path, "utf-8");
     return text.includes("claude-plugins-official");
@@ -231,7 +181,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
     return results;
   }
 
-  // Step 1: ensure marketplace is registered (idempotent)
   if (!(await marketplaceRegistered(env))) {
     log.info(`Adding marketplace: ${MARKETPLACE_SLUG}`);
     const mkt = await $`claude plugin marketplace add ${MARKETPLACE_SLUG}`.nothrow();
@@ -244,9 +193,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
     }
   }
 
-  // Step 2: install each plugin if not already present. Re-load the registry once
-  // up front; refreshing per-plugin is wasteful since `claude plugin install` writes
-  // to it but our detection just needs the initial baseline.
   const initiallyInstalled = await loadInstalledPlugins(env);
 
   for (const name of ALL_PLUGINS) {
@@ -280,17 +226,12 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
     }
   }
 
-  // Step 2.5: install REAL language-server binaries for detected runtimes.
-  // The `*-lsp` plugins from Anthropic don't ship binaries (they're stubs);
-  // we install the actual servers so the in-CC LSP tool works.
-  const lspResults = await installRealLspBinaries(env, dryRun);
-  results.push(...lspResults);
+  results.push(...(await installRealLspBinaries(env, dryRun)));
 
-  // Step 3: install from extra marketplaces (Karpathy skills, etc.)
   for (const { slug, marketplaceName, plugins } of EXTRA_MARKETPLACES) {
-    const knownPath = join(env.homeDir, ".claude", "plugins", "known_marketplaces.json");
+    const knownPath = join(env.claudeDir, "plugins", "known_marketplaces.json");
     let mpText = "";
-    try { mpText = await fs.readFile(knownPath, "utf-8"); } catch { /* no file yet */ }
+    try { mpText = await fs.readFile(knownPath, "utf-8"); } catch { }
     if (!mpText.includes(marketplaceName)) {
       log.info(`Adding marketplace: ${slug}`);
       const mkt = await $`claude plugin marketplace add ${slug}`.nothrow();
@@ -307,7 +248,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       }
     }
 
-    // Re-load registry so we see what's now installed
     const installedNow = await loadInstalledPlugins(env);
     for (const name of plugins) {
       const key = `${name}@${marketplaceName}`;

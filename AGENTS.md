@@ -44,8 +44,8 @@ Three install tiers gate every component:
 | Tier | Prompt | Default | What it contains |
 |------|--------|---------|------------------|
 | **Primordial** | none (silent) | always installs | `settings.json`, `CLAUDE.md` + symlinks, 6 hook scripts, `tmux.conf`, `starship.toml`, `statusline.sh`, `mise`, `just`, git aliases, telemetry env vars, `tasks/lessons.md` |
-| **Recommended** | yes/no | **yes** | Code Intelligence (Serena + ast-grep), Browser+Web (Playwright + Crawl4AI + Docfork + DeepWiki), Memory+Context (claude-mem + context-mode), Security (Snyk + container-use), GitHub stack, Workstation extras |
-| **Optional** | yes/no | **no** | Channels + ntfy, ccflare, Multica, PostgreSQL MCP Pro, Stitch + design templates, Obsidian, n8n + Composio, autoresearch |
+| **Recommended** | yes/no | **yes** | Code Intelligence (Serena + ast-grep), Browser+Web (Playwright + Crawl4AI + Docfork + DeepWiki), Memory+Context (claude-mem + context-mode + claude-hud), cc-plugins (Anthropic official marketplace), skills-registry (skills.sh seed bundle), Security (Snyk + container-use), GitHub stack, Workstation extras |
+| **Optional** | yes/no | **no** | Observability (ccflare), Orchestration (Multica), Design (Stitch + awesome-design-md), Knowledge (Obsidian + claude-obsidian), Workflow (n8n + Composio) |
 
 Primordial files are **backed up then overridden** at `~/.claude-backup/{timestamp}/`. Component installs must be **idempotent** (check before acting), MCP entries must be **deep-merged** into existing JSON, and shell rc edits use the `# code-tools-managed` marker to prevent duplication.
 
@@ -53,8 +53,7 @@ Primordial files are **backed up then overridden** at `~/.claude-backup/{timesta
 
 | File | Description |
 |------|-------------|
-| `README.md` | v12 system architecture: 40 components, 7 MCP servers, 12 principles, MCP config, validation trail |
-| `IMPLEMENTATION_PLAN.md` | Authoritative build spec — file structure, 13 execution phases, tier definitions, OS-adaptive install strategy |
+| `README.md` | v12 system architecture: components, MCP servers, principles, MCP config, validation trail |
 | `package.json` | Bun package (`@youssefKadaouiAbbassi/code-tools-setup` v0.1.0), scripts, engines, publish config |
 | `tsconfig.json` | TypeScript config (ES2022, ESNext modules, strict, `bun-types`) |
 | `bootstrap.sh` | Fresh-machine entrypoint — installs Bun + Claude Code + jq, then `bunx` the installer |
@@ -69,10 +68,11 @@ Each subdirectory has its own `AGENTS.md` (or should) with the detailed contract
 |-----------|---------|
 | `bin/` | CLI entry point (`setup.ts`) — wires `citty` commands and dispatches to `src/commands/` |
 | `src/` | Installer source — `types.ts`, `utils.ts`, `detect.ts`, `backup.ts`, `primordial.ts`, `verify.ts`, `status.ts`, `restore.ts`, plus `commands/` and `components/` subtrees |
-| `src/components/` | 14 category installers (code-intel, browser-web, memory-context, security, github, notifications, observability, orchestration, database, design, knowledge, workflow, ml-research, workstation) exported through `index.ts` barrel |
+| `src/components/` | 13 category installers (code-intel, browser-web, memory-context, cc-plugins, skills-registry, security, github, workstation, observability, orchestration, design, knowledge, workflow) exported through `index.ts` barrel |
 | `configs/` | Templates deployed by `primordial.ts` — `home-claude/`, `project-claude/`, `hooks/`, plus `tmux.conf`, `starship.toml`, `statusline.sh` |
-| `agents/` | 8 agent definitions copied into the target `~/.claude/agents/` (architect, devops, implementer, researcher, reviewer, security, tdd, writer) |
-| `skills/` | `setup/` skill — lets Claude Code itself invoke the installer as a slash command |
+| `agents/` | /dev orchestrator subagents (dev-classifier, dev-clarifier, dev-recorder) deployed to `~/.claude/agents/` |
+| `skills/` | Orchestration skills (dev, ship-feature, fix-bug, refactor-safely, security-audit, onboard-codebase, tdd-first, doc-hygiene, ci-hygiene, knowledge-base) deployed to `~/.claude/skills/` |
+| `commands/` | User-level slash commands (/dev) deployed to `~/.claude/commands/` |
 | `tests/` | `unit/`, `integration/`, `e2e/`, `behavioral/`, `scenarios/`, `ci/` (bats), `fixtures/` — uses `bun test`, `@gmrchk/cli-testing-library`, and `testcontainers` |
 | `tasks/` | `lessons.md` — corrections log the installer itself respects (repo's own dogfooding) |
 | `.claude-plugin/` | `plugin.json` — Claude Code plugin manifest exposing the installer as a plugin |
@@ -83,7 +83,6 @@ Each subdirectory has its own `AGENTS.md` (or should) with the detailed contract
 
 ### Working In This Repository
 
-- **Read `IMPLEMENTATION_PLAN.md` first.** It is the authoritative build spec with the exact file structure, dependency phases, and technology choices. Do not deviate without updating it.
 - **Stack is locked:** Bun + TypeScript + `@clack/prompts` + `picocolors` + `citty` + `deepmerge-ts`. Do not reintroduce `simple-git`, `fs-extra`, `which`, or `yaml` — those were superseded by Bun built-ins (`Bun.$`, `Bun.file`, `Bun.which`) and the current deps.
 - **Use `Bun.$` for shell operations** in TypeScript, not raw `exec`/`spawn`.
 - **Use dedicated tools** (Glob, Grep, Read) over Bash `find`/`grep`/`cat`.

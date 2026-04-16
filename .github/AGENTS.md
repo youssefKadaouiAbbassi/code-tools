@@ -12,7 +12,7 @@ Parent: [`../AGENTS.md`](../AGENTS.md).
 
 | File | Description |
 |------|-------------|
-| `workflows/test.yml` | Single test pipeline with 5 jobs — `unit`, `lint-hooks`, `e2e-ubuntu`, `bats-ubuntu`, `bats-macos`. Triggers on push/PR to `master`. |
+| `workflows/test.yml` | Single test pipeline with 6 jobs — `typecheck`, `unit`, `lint-hooks`, `e2e-ubuntu`, `bats-ubuntu`, `bats-macos`. Triggers on push/PR to `master`. Pins `ubuntu-24.04` and `BUN_VERSION` env var; declares `permissions: contents: read` and concurrency cancel. |
 
 ## Subdirectories
 
@@ -24,10 +24,11 @@ Parent: [`../AGENTS.md`](../AGENTS.md).
 
 | Job | Runner | Depends on | What it does |
 |-----|--------|------------|--------------|
-| `unit` | `ubuntu-latest` | — | `bun install` then `bun test tests/unit` and `bun test tests/integration`. |
-| `lint-hooks` | `ubuntu-latest` | — | Installs `shellcheck` via apt and runs it against `configs/hooks/*.sh`, `configs/project-claude/hooks/*.sh`, and `bootstrap.sh`. |
-| `e2e-ubuntu` | `ubuntu-latest` | `unit` | `bun test tests/e2e` with a 15-minute timeout (testcontainers). |
-| `bats-ubuntu` | `ubuntu-latest` | `unit` | Runs the installer with `--non-interactive --tier primordial`, then executes `bats tests/ci/verify.bats`. |
+| `typecheck` | `ubuntu-24.04` | — | `bun install --frozen-lockfile` then `bun tsc --noEmit`. |
+| `unit` | `ubuntu-24.04` | — | `bun install --frozen-lockfile` then `bun test tests/unit` and `bun test tests/integration`. |
+| `lint-hooks` | `ubuntu-24.04` | — | Installs `shellcheck` via apt and runs it against `configs/hooks/*.sh`, `configs/project-claude/hooks/*.sh`, and `bootstrap.sh`. |
+| `e2e-ubuntu` | `ubuntu-24.04` | `unit` | `bun test tests/e2e` with a 15-minute timeout (testcontainers). |
+| `bats-ubuntu` | `ubuntu-24.04` | `unit` | Runs the installer with `--non-interactive --tier primordial`, then executes `bats tests/ci/verify.bats`. |
 | `bats-macos` | `macos-14` | `unit` | Same as `bats-ubuntu` but on macOS. Gated to `master` pushes only (`if: github.ref == 'refs/heads/master'`) to conserve macOS minutes. |
 
 ## For AI Agents
@@ -36,7 +37,7 @@ Parent: [`../AGENTS.md`](../AGENTS.md).
 
 - **Keep the single-file convention.** All jobs live in `workflows/test.yml`. Do not split into multiple workflow files without a concrete reason (matrix complexity, unrelated schedules, etc.) — one file is easier to reason about.
 - **Pin actions by major version.** Current pins: `actions/checkout@v4`, `oven-sh/setup-bun@v2`. When adding new actions, pin to `@vN` (not `@latest`, not a floating `main`).
-- **Bun version is `latest` intentionally.** `bootstrap.sh` also installs the latest Bun, so CI mirrors the user path. If this causes flakes, pin to a specific `bun-version` in both places together.
+- **Bun version is pinned via `BUN_VERSION` env var** (currently `1.3.11`). Update the env var in one place when bumping; all jobs consume it. `bootstrap.sh` installs `bun-install-latest` for end-users — CI uses a pinned version for reproducibility.
 - **Respect job dependencies.** `e2e` and `bats` jobs `needs: [unit]` so fast unit failures short-circuit the slower lanes. Preserve this ordering when adding jobs.
 - **macOS runs are gated to `master`.** `bats-macos` uses `if: github.ref == 'refs/heads/master'` — PRs do not consume macOS minutes. Do not remove this guard without approval.
 - **Install system tools inside the job.** `shellcheck`, `bats`, and `jq` are installed step-by-step (`apt-get`/`brew`) rather than via third-party setup actions — keeps the supply chain small.

@@ -1,4 +1,6 @@
 import { $ } from "bun";
+import { promises as fs } from "node:fs";
+import { dirname } from "node:path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, registerMcp, log } from "../utils.js";
 
@@ -84,19 +86,6 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
     });
   }
 
-  // --- Composio MCP (HTTP v3) ---
-  //
-  // Composio's live MCP endpoint shape (as of Apr 2026):
-  //   https://backend.composio.dev/v3/mcp/<SERVER_ID>?user_id=<UID>
-  //   header: x-api-key: <COMPOSIO_API_KEY>
-  //
-  // Legacy `https://mcp.composio.dev/composio/server/<KEY>/mcp` is dead (301 → 404).
-  // `Authorization: Bearer` is wrong; composio uses `x-api-key`.
-  //
-  // If COMPOSIO_MCP_SERVER_ID is unset but the key is valid, we auto-bootstrap
-  // a server that exposes the no-auth `composio` meta-toolkit
-  // (LIST_TOOLKITS / INITIATE_CONNECTION / EXECUTE_TOOL), so the user can wire
-  // extra toolkits later directly from Claude Code without leaving the session.
   try {
     const key = process.env.COMPOSIO_API_KEY ?? "";
     const userId = process.env.COMPOSIO_USER_ID || env.homeDir.split("/").pop() || "user";
@@ -125,15 +114,29 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
           no_auth_apps: ["composio"],
         });
         const resp = await $`curl -sS -X POST https://backend.composio.dev/api/v3/mcp/servers -H ${"x-api-key: " + key} -H ${"Content-Type: application/json"} -d ${body}`.quiet().text();
+        let parsed: { id?: string; error?: string } = {};
         try {
-          const parsed = JSON.parse(resp) as { id?: string };
-          if (parsed.id) {
-            serverId = parsed.id;
-            log.info(`Composio bootstrap MCP server created: ${serverId}`);
-            const secretsPath = `${env.homeDir}/.config/code-tools/secrets.env`;
-            await $`sh -c ${`grep -v '^export COMPOSIO_MCP_SERVER_ID=' "${secretsPath}" 2>/dev/null > "${secretsPath}.tmp" || true; echo 'export COMPOSIO_MCP_SERVER_ID="${serverId}"' >> "${secretsPath}.tmp"; mv "${secretsPath}.tmp" "${secretsPath}"; chmod 600 "${secretsPath}"`}`.quiet().nothrow();
-          }
-        } catch { /* fall through to error below */ }
+          parsed = JSON.parse(resp);
+        } catch (err) {
+          log.warn(`Composio bootstrap: unparsable response (${err instanceof Error ? err.message : String(err)}): ${resp.slice(0, 200)}`);
+        }
+        if (parsed.error) log.warn(`Composio bootstrap rejected: ${parsed.error}`);
+        if (parsed.id && /^[A-Za-z0-9_-]{6,}$/.test(parsed.id)) {
+          serverId = parsed.id;
+          log.info(`Composio bootstrap MCP server created: ${serverId}`);
+          const secretsPath = `${env.homeDir}/.config/code-tools/secrets.env`;
+          await fs.mkdir(dirname(secretsPath), { recursive: true });
+          let existing = "";
+          try { existing = await fs.readFile(secretsPath, "utf-8"); } catch { }
+          const filtered = existing
+            .split("\n")
+            .filter((l) => l.length > 0 && !l.startsWith("export COMPOSIO_MCP_SERVER_ID="));
+          filtered.push(`export COMPOSIO_MCP_SERVER_ID=${JSON.stringify(serverId)}`);
+          await fs.writeFile(secretsPath, filtered.join("\n") + "\n", { mode: 0o600 });
+          await fs.chmod(secretsPath, 0o600);
+        } else if (parsed.id) {
+          log.warn(`Composio bootstrap: malformed id rejected`);
+        }
       }
 
       if (!serverId) {

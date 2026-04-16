@@ -4,25 +4,19 @@ import { join } from "path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, fileExists, mergeJsonFile, registerMcp, log } from "../utils.js";
 
-/**
- * Wire claude-hud as the Claude Code statusline.
- * Replicates what claude-hud's own `/claude-hud:setup` slash command writes to settings.json.
- * Idempotent: skips if statusLine already references claude-hud.
- */
 async function wireClaudeHudStatusline(env: DetectedEnvironment): Promise<{ wired: boolean; message: string }> {
   const settingsPath = join(env.claudeDir, "settings.json");
 
-  // Skip if already wired
   if (await fileExists(settingsPath)) {
     try {
       const settings = JSON.parse(await fs.readFile(settingsPath, "utf-8")) as { statusLine?: { command?: string } };
       if (settings.statusLine?.command?.includes("claude-hud")) {
         return { wired: false, message: "statusLine already configured" };
       }
-    } catch { /* fall through */ }
+    } catch { }
   }
 
-  const pluginRoot = join(env.homeDir, ".claude", "plugins", "cache", "claude-hud", "claude-hud");
+  const pluginRoot = join(env.claudeDir, "plugins", "cache", "claude-hud", "claude-hud");
   let versions: string[] = [];
   try { versions = await fs.readdir(pluginRoot); }
   catch { return { wired: false, message: `plugin cache not found at ${pluginRoot}` }; }
@@ -53,30 +47,15 @@ async function wireClaudeHudStatusline(env: DetectedEnvironment): Promise<{ wire
 
   await mergeJsonFile(settingsPath, { statusLine: { type: "command", command, padding: 0 } });
 
-  // Read our installer version from package.json so the HUD tag stays in sync
   let installerVersion = "0.0.0";
   try {
     const pkgPath = join(import.meta.dir, "..", "..", "package.json");
     const pkg = await Bun.file(pkgPath).json() as { version?: string };
     if (typeof pkg.version === "string") installerVersion = pkg.version;
-  } catch {
-    // fall back to the default
-  }
-  // Statusline tag. We tried embedding OSC 8 clickable URLs here (mul/mem/cc)
-  // but claude-hud 0.0.12's sliceVisible truncates mid-OSC-8-token when the
-  // composite line exceeds its width budget, leaving garbled output like
-  // `UCCS v0.1.0 · mul ·` with missing links. Clickable URLs are emitted from
-  // session-start.sh instead (reliable, high-visibility).
+  } catch { }
   const customLine = `UCCS v${installerVersion}`;
 
-  // Configure claude-hud:
-  //  - lineLayout: "compact"        → single-line HUD
-  //  - display.showUsage: true      → always show 5h rolling + 7d weekly limits
-  //  - display.usageBarEnabled: true→ visual usage bar
-  //  - display.usageThreshold: 0    → no threshold; always visible
-  //  - display.customLine           → UCCS tag + clickable tool URLs
-  // Plugin reads ~/.claude/plugins/claude-hud/config.json at render time.
-  const hudConfigPath = join(env.homeDir, ".claude", "plugins", "claude-hud", "config.json");
+  const hudConfigPath = join(env.claudeDir, "plugins", "claude-hud", "config.json");
   await mergeJsonFile(hudConfigPath, {
     lineLayout: "compact",
     display: {
@@ -210,14 +189,12 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       });
     } else {
       // Detect if already installed by checking the plugin registry
-      const registryPath = `${env.homeDir}/.claude/plugins/installed_plugins.json`;
+      const registryPath = join(env.claudeDir, "plugins", "installed_plugins.json");
       let alreadyInstalled = false;
       try {
         const registry = await Bun.file(registryPath).json() as { plugins?: Record<string, unknown> };
         alreadyInstalled = Object.keys(registry.plugins ?? {}).some((k) => k.startsWith("claude-hud@"));
-      } catch {
-        // registry doesn't exist yet — that's fine
-      }
+      } catch { }
 
       if (alreadyInstalled) {
         const wireResult = await wireClaudeHudStatusline(env);
@@ -230,34 +207,34 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
           verifyPassed: true,
         });
       } else {
-        // Add marketplace (idempotent — Claude CLI is no-op if already added)
-        await $`claude plugin marketplace add jarrodwatts/claude-hud`.nothrow();
-        // Install plugin (user scope is the default)
-        const installResult = await $`claude plugin install claude-hud`.nothrow();
-        const exitCode = installResult.exitCode;
-
-        if (exitCode === 0) {
-          const wireResult = await wireClaudeHudStatusline(env);
-          log.success(
-            wireResult.wired
-              ? `Claude HUD installed and ${wireResult.message} — restart Claude Code to activate`
-              : `Claude HUD installed — restart Claude Code to activate (${wireResult.message})`,
-          );
-          results.push({
-            component: "Claude HUD",
-            status: "installed",
-            message: wireResult.wired
-              ? `Claude HUD installed and statusline wired — restart Claude Code to activate`
-              : `Claude HUD installed — restart Claude Code (${wireResult.message})`,
-            verifyPassed: true,
-          });
-        } else {
+        const mkt = await $`claude plugin marketplace add jarrodwatts/claude-hud`.nothrow();
+        if (mkt.exitCode !== 0) {
           results.push({
             component: "Claude HUD",
             status: "failed",
-            message: `claude plugin install exited with code ${exitCode} — try manually: claude plugin install claude-hud`,
+            message: `claude plugin marketplace add exited ${mkt.exitCode}: ${mkt.stderr.toString().slice(0, 200)}`,
             verifyPassed: false,
           });
+        } else {
+          const install = await $`claude plugin install claude-hud`.nothrow();
+          if (install.exitCode !== 0) {
+            results.push({
+              component: "Claude HUD",
+              status: "failed",
+              message: `claude plugin install exited ${install.exitCode}: ${install.stderr.toString().slice(0, 200)}`,
+              verifyPassed: false,
+            });
+          } else {
+            const wire = await wireClaudeHudStatusline(env);
+            results.push({
+              component: "Claude HUD",
+              status: "installed",
+              message: wire.wired
+                ? `Claude HUD installed, statusline wired — restart Claude Code`
+                : `Claude HUD installed — restart Claude Code (${wire.message})`,
+              verifyPassed: wire.wired,
+            });
+          }
         }
       }
     }

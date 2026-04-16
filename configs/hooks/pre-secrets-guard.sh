@@ -53,9 +53,10 @@ check_secret 'BEGIN[[:space:]]+(RSA[[:space:]]+)?PRIVATE[[:space:]]+KEY' "Blocke
 check_secret 'BEGIN[[:space:]]+OPENSSH[[:space:]]+PRIVATE[[:space:]]+KEY' "Blocked: OpenSSH private key detected"
 check_secret 'BEGIN[[:space:]]+EC[[:space:]]+PRIVATE[[:space:]]+KEY' "Blocked: EC private key detected"
 
-# .env file access (reading secrets files)
-if [[ "$tool_name" == "Read" ]] || [[ "$tool_name" == "Bash" ]]; then
-  check_secret '(^|[^a-zA-Z0-9_/])\.(env)(\.[a-zA-Z]+)?([^a-zA-Z0-9_]|$)' "Blocked: .env file access detected — use environment variable references instead"
+# .env access via Bash commands (grep, tail, less, bat, etc.).
+# Read tool is already blocked by settings.json Read(.env*) deny.
+if [[ "$tool_name" == "Bash" ]]; then
+  check_secret '(^|[^a-zA-Z0-9_/])\.(env)(\.[a-zA-Z]+)?([^a-zA-Z0-9_]|$)' "Blocked: .env file access via Bash — use environment variable references instead"
 fi
 
 # Database connection strings with passwords
@@ -72,9 +73,15 @@ check_secret '[?&]secret=[A-Za-z0-9_\-]{16,}' "Blocked: Secret in URL query para
 # JWT tokens
 check_secret 'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' "Blocked: JWT token detected"
 
-# Anthropic / OpenAI keys
+# Anthropic / OpenAI / other LLM provider keys
 check_secret 'sk-ant-[A-Za-z0-9_\-]{90,}' "Blocked: Anthropic API key detected"
-check_secret 'sk-[A-Za-z0-9]{48}' "Blocked: OpenAI API key detected"
+check_secret 'sk-proj-[A-Za-z0-9_\-]{40,}' "Blocked: OpenAI project key detected (sk-proj-...)"
+check_secret 'sk-svcacct-[A-Za-z0-9_\-]{40,}' "Blocked: OpenAI service account key detected"
+check_secret 'sk-[A-Za-z0-9]{48}' "Blocked: OpenAI legacy key detected"
+check_secret 'sk-or-[vV][0-9]-[A-Za-z0-9_\-]{40,}' "Blocked: OpenRouter API key detected"
+check_secret 'gsk_[A-Za-z0-9]{50,}' "Blocked: Groq API key detected"
+check_secret 'xai-[A-Za-z0-9]{40,}' "Blocked: xAI API key detected"
+check_secret 'AIzaSy[A-Za-z0-9_\-]{33}' "Blocked: Google API key detected"
 
 # Slack tokens
 check_secret 'xoxb-[A-Za-z0-9\-]+' "Blocked: Slack bot token (xoxb-...)"

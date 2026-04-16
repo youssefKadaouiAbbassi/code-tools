@@ -2,16 +2,6 @@ import { $ } from "bun";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, log } from "../utils.js";
 
-// Third-party skills installed from skills.sh (https://skills.sh) — the open
-// agent-skills registry (~90k skills, 1.1M installs on `find-skills` alone).
-// Format: `<owner>/<repo>@<skill>`. `npx skills add` copies into
-// `~/.agents/skills/<skill>/` and symlinks into `~/.claude/skills/` so Claude
-// Code auto-discovers them. `npx skills update` refreshes in place — no
-// marketplace / plugin reinstall churn.
-//
-// Why not claude-plugins: for third-party skills that only ship a SKILL.md
-// (no hooks, no MCPs, no commands), the plugin system adds unnecessary cycles.
-// skills.sh is the lightest channel.
 const SKILLS_SH_PACKAGES: Array<{ source: string; skill?: string; why: string }> = [
   {
     source: "vercel-labs/skills",
@@ -85,8 +75,6 @@ export async function install(_env: DetectedEnvironment, dryRun: boolean): Promi
     }
 
     try {
-      // `-y` skips scope prompt (defaults to global), `-g` forces global scope
-      // (~/.agents/skills → symlinked into ~/.claude/skills).
       const cmd = pkg.skill
         ? `npx --yes skills add ${pkg.source} -g -y --skill ${pkg.skill}`
         : `npx --yes skills add ${pkg.source} -g -y`;

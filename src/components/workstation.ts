@@ -140,9 +140,6 @@ export async function install(
         verifyPassed: installed,
       });
     } else {
-      // Community Ubuntu installer for Debian/Ubuntu-like distros.
-      // Download to a temp file and run with bash to avoid quoting/escaping pitfalls
-      // that occur when piping curl through sh -c with nested quotes.
       log.info("Installing Ghostty via community Ubuntu installer (will prompt for sudo)...");
       const scriptPath = `/tmp/ghostty-install-${Date.now()}.sh`;
       const scriptUrl = "https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh";
@@ -283,7 +280,6 @@ export async function install(
         verifyPassed: installed,
       });
     } else {
-      // Linux: download binary, no sudo needed
       const arch = env.arch === "arm64" ? "arm64" : "amd64";
       const cmd =
         `set -e; ` +

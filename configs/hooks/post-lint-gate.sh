@@ -25,6 +25,13 @@ if [[ -z "$file_path" ]] || [[ ! -f "$file_path" ]]; then
   exit 0
 fi
 
+file_path="$(realpath "$file_path" 2>/dev/null || printf '%s' "$file_path")"
+project_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+case "$file_path" in
+  "$project_root"/*) ;;
+  *) exit 0 ;;
+esac
+
 ext="${file_path##*.}"
 
 run_lint() {
@@ -41,9 +48,7 @@ run_lint() {
 
 case "$ext" in
   ts|tsx|js|jsx|mjs|cjs)
-    run_lint eslint --no-eslintrc -c "$(dirname "$file_path")/.eslintrc"* "$file_path" 2>/dev/null \
-      || run_lint npx eslint "$file_path" 2>/dev/null \
-      || true
+    run_lint npx eslint "$file_path" 2>/dev/null || true
     ;;
   py)
     run_lint ruff check "$file_path"
