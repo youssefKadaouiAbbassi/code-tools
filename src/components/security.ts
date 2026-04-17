@@ -50,20 +50,14 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
 
   // --- Snyk MCP ---
   try {
-    if (commandExists("snyk")) {
-      log.info("Snyk already installed, skipping");
-      results.push({
-        component: "Snyk MCP",
-        status: "already-installed",
-        message: "Snyk is already installed",
-        verifyPassed: true,
-      });
-    } else if (dryRun) {
-      log.info("[dry-run] Would run: npx -y snyk@latest mcp configure --tool=claude-cli");
+    const existed = commandExists("snyk");
+    if (dryRun) {
+      const verb = existed ? "upgrade" : "install";
+      log.info(`[dry-run] Would ${verb}: npm install -g snyk@latest && snyk mcp configure --tool=claude-cli`);
       results.push({
         component: "Snyk MCP",
         status: "skipped",
-        message: "[dry-run] Would configure Snyk MCP via claude-cli",
+        message: `[dry-run] Would ${verb} Snyk MCP`,
         verifyPassed: false,
       });
     } else {
@@ -73,7 +67,7 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       results.push({
         component: "Snyk MCP",
         status: installed ? "installed" : "failed",
-        message: installed ? "Snyk MCP configured successfully" : "Snyk MCP setup ran but binary not found",
+        message: installed ? (existed ? "Snyk upgraded + MCP reconfigured" : "Snyk MCP configured successfully") : "Snyk MCP setup ran but binary not found",
         verifyPassed: installed,
       });
     }
@@ -89,29 +83,23 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
   // --- container-use ---
   try {
     const cuExists = () => commandExists("container-use") || commandExists("cu");
-    if (cuExists()) {
-      log.info("container-use already installed, skipping");
-      results.push({
-        component: "container-use",
-        status: "already-installed",
-        message: "container-use is already installed",
-        verifyPassed: true,
-      });
-    } else if (dryRun) {
+    const existed = cuExists();
+    if (dryRun) {
+      const verb = existed ? "upgrade" : "install";
       const cmd = env.packageManager === "brew"
-        ? "brew install dagger/tap/container-use"
-        : "curl -fsSL https://dl.dagger.io/container-use/install.sh | sh";
-      log.info(`[dry-run] Would run: ${cmd}`);
+        ? (existed ? "brew upgrade dagger/tap/container-use" : "brew install dagger/tap/container-use")
+        : "curl --connect-timeout 15 --max-time 300 -fsSL https://dl.dagger.io/container-use/install.sh | sh";
+      log.info(`[dry-run] Would ${verb}: ${cmd}`);
       results.push({
         component: "container-use",
         status: "skipped",
-        message: `[dry-run] Would install container-use via: ${cmd}`,
+        message: `[dry-run] Would ${verb} container-use`,
         verifyPassed: false,
       });
     } else {
       let cmd: string;
       if (env.packageManager === "brew") {
-        cmd = "brew install dagger/tap/container-use";
+        cmd = existed ? "brew upgrade dagger/tap/container-use" : "brew install dagger/tap/container-use";
       } else {
         const arch = env.arch === "arm64" ? "arm64" : "amd64";
         const platform = env.os === "macos" ? "darwin" : "linux";
@@ -131,7 +119,7 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       results.push({
         component: "container-use",
         status: installed ? "installed" : "failed",
-        message: installed ? "container-use installed successfully" : "container-use install ran but binary not found",
+        message: installed ? (existed ? "container-use upgraded to latest" : "container-use installed successfully") : "container-use install ran but binary not found",
         verifyPassed: installed,
       });
     }

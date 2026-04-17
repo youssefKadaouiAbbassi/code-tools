@@ -82,20 +82,14 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
 
   // --- Playwright CLI ---
   try {
-    if (commandExists("playwright")) {
-      log.info("Playwright CLI already installed, skipping");
-      results.push({
-        component: "Playwright CLI",
-        status: "already-installed",
-        message: "Playwright CLI is already installed",
-        verifyPassed: true,
-      });
-    } else if (dryRun) {
-      log.info("[dry-run] Would run: npm install -g @playwright/cli@latest");
+    const existed = commandExists("playwright");
+    if (dryRun) {
+      const verb = existed ? "upgrade" : "install";
+      log.info(`[dry-run] Would ${verb}: npm install -g playwright@latest`);
       results.push({
         component: "Playwright CLI",
         status: "skipped",
-        message: "[dry-run] Would install Playwright CLI",
+        message: `[dry-run] Would ${verb} Playwright CLI`,
         verifyPassed: false,
       });
     } else {
@@ -104,7 +98,7 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       results.push({
         component: "Playwright CLI",
         status: installed ? "installed" : "failed",
-        message: installed ? "Playwright CLI installed successfully" : "Playwright CLI install ran but binary not found",
+        message: installed ? (existed ? "Playwright CLI upgraded to latest" : "Playwright CLI installed successfully") : "Playwright CLI install ran but binary not found",
         verifyPassed: installed,
       });
     }
@@ -124,32 +118,29 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       commandExists("crawl4ai-doctor") ||
       commandExists("crawl4ai-setup");
 
-    if (isInstalled()) {
-      log.info("Crawl4AI already installed, skipping");
-      results.push({
-        component: "Crawl4AI",
-        status: "already-installed",
-        message: "Crawl4AI is already installed (run `pipx upgrade crawl4ai` to update)",
-        verifyPassed: true,
-      });
-    } else if (dryRun) {
-      log.info("[dry-run] Would install Crawl4AI (latest, >=0.8.6)");
+    const existed = isInstalled();
+    if (dryRun) {
+      const verb = existed ? "upgrade" : "install";
+      log.info(`[dry-run] Would ${verb} Crawl4AI (latest, >=0.8.6)`);
       results.push({
         component: "Crawl4AI",
         status: "skipped",
-        message: "[dry-run] Would install Crawl4AI (latest)",
+        message: `[dry-run] Would ${verb} Crawl4AI`,
         verifyPassed: false,
       });
     } else {
-      log.info("Installing Crawl4AI latest (avoiding v0.8.5 supply-chain issue)");
-      // Prefer pipx for isolated tool install; fall back to uv or pip (PEP 668 workaround).
+      log.info(existed ? "Upgrading Crawl4AI to latest" : "Installing Crawl4AI latest");
       let installCmd: string;
-      if (commandExists("pipx")) {
+      if (existed && commandExists("pipx")) {
+        installCmd = "pipx upgrade crawl4ai || pipx install --force 'crawl4ai>=0.8.6'";
+      } else if (existed && commandExists("uv")) {
+        installCmd = "uv tool upgrade crawl4ai || uv tool install --force 'crawl4ai>=0.8.6'";
+      } else if (commandExists("pipx")) {
         installCmd = "pipx install 'crawl4ai>=0.8.6'";
       } else if (commandExists("uv")) {
         installCmd = "uv tool install 'crawl4ai>=0.8.6'";
       } else {
-        installCmd = "pip install --user --break-system-packages 'crawl4ai>=0.8.6'";
+        installCmd = "pip install --user --break-system-packages --upgrade 'crawl4ai>=0.8.6'";
       }
       await $`sh -c ${installCmd}`.nothrow();
       let verified = isInstalled();
@@ -167,7 +158,7 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       results.push({
         component: "Crawl4AI",
         status: verified ? "installed" : "failed",
-        message: verified ? "Crawl4AI installed successfully" : "Crawl4AI install ran but verification failed (try: pipx install crawl4ai)",
+        message: verified ? (existed ? "Crawl4AI upgraded to latest" : "Crawl4AI installed successfully") : "Crawl4AI install ran but verification failed (try: pipx install crawl4ai)",
         verifyPassed: verified,
       });
     }

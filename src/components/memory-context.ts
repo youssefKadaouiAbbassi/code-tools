@@ -143,23 +143,16 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
         message: "[dry-run] Would install and register claude-mem MCP server",
         verifyPassed: false,
       });
-    } else if (commandExists("claude-mem")) {
-      log.info("claude-mem already installed, refreshing MCP registration only");
-      await registerMcp("claude-mem", claudeMemMcp);
-      results.push({
-        component: "claude-mem",
-        status: "already-installed",
-        message: "claude-mem already installed; MCP config refreshed",
-        verifyPassed: true,
-      });
     } else {
-      await $`sh -c "npx -y claude-mem install --ide claude-code"`;
+      const existed = commandExists("claude-mem");
+      log.info(existed ? "Upgrading claude-mem to latest" : "Installing claude-mem");
+      await $`sh -c "npx -y claude-mem@latest install --ide claude-code"`;
       await registerMcp("claude-mem", claudeMemMcp);
-      log.success("claude-mem MCP server registered (bound to 127.0.0.1)");
+      log.success(existed ? "claude-mem upgraded + MCP registered" : "claude-mem installed + MCP registered (bound to 127.0.0.1)");
       results.push({
         component: "claude-mem",
         status: "installed",
-        message: "claude-mem installed and MCP config registered",
+        message: existed ? "claude-mem upgraded to latest and MCP config refreshed" : "claude-mem installed and MCP config registered",
         verifyPassed: true,
       });
     }

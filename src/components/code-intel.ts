@@ -79,30 +79,23 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       }
     }
 
-    if (commandExists("serena-agent")) {
-      log.info("Serena already installed, skipping");
-      results.push({
-        component: "Serena",
-        status: "already-installed",
-        message: "Serena is already installed",
-        verifyPassed: true,
-      });
-    } else if (dryRun) {
-      log.info("[dry-run] Would run: uv tool install -p 3.13 serena-agent@latest --prerelease=allow");
+    const serenaExisted = commandExists("serena") || commandExists("serena-agent");
+    if (dryRun) {
+      const verb = serenaExisted ? "upgrade" : "install";
+      log.info(`[dry-run] Would ${verb}: uv tool install -p 3.13 serena-agent@latest --prerelease=allow --force`);
       results.push({
         component: "Serena",
         status: "skipped",
-        message: "[dry-run] Would install Serena via uv",
+        message: `[dry-run] Would ${verb} Serena via uv`,
         verifyPassed: false,
       });
     } else {
-      await $`sh -c 'export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"; uv tool install -p 3.13 serena-agent@latest --prerelease=allow'`;
-      // serena-agent package installs binary as 'serena'
+      await $`sh -c 'export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"; uv tool install -p 3.13 serena-agent@latest --prerelease=allow --force'`;
       const installed = commandExists("serena") || commandExists("serena-agent");
       results.push({
         component: "Serena",
         status: installed ? "installed" : "failed",
-        message: installed ? "Serena installed successfully" : "Serena install ran but binary not found",
+        message: installed ? (serenaExisted ? "Serena upgraded to latest" : "Serena installed successfully") : "Serena install ran but binary not found",
         verifyPassed: installed,
       });
 
@@ -127,13 +120,20 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
 
   // --- ast-grep ---
   try {
-    if (commandExists("ast-grep")) {
-      log.info("ast-grep already installed, skipping");
+    const existed = commandExists("ast-grep");
+    if (dryRun) {
+      const verb = existed ? "upgrade" : "install";
+      const cmd = env.packageManager === "brew" ? "brew upgrade ast-grep" : "cargo install ast-grep --locked --force";
+      log.info(`[dry-run] Would ${verb}: ${cmd}`);
+      results.push({ component: "ast-grep", status: "skipped", message: `[dry-run] Would ${verb} ast-grep`, verifyPassed: false });
+    } else if (existed) {
+      const cmd = env.packageManager === "brew" ? "brew upgrade ast-grep" : "cargo install ast-grep --locked --force";
+      await $`sh -c ${cmd}`.nothrow();
       results.push({
         component: "ast-grep",
-        status: "already-installed",
-        message: "ast-grep is already installed",
-        verifyPassed: true,
+        status: "installed",
+        message: "ast-grep upgraded to latest",
+        verifyPassed: commandExists("ast-grep"),
       });
     } else {
       const astGrep = codeIntelCategory.components[1];
