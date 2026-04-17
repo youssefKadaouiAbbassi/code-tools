@@ -21,6 +21,16 @@ Activate and **research before speaking** when the task or your own reasoning in
 - **Upstream repo state** — "is there a PR for X?", "did they fix Y?", "what's on main?"
 - **External SaaS integration** — Slack, Linear, Gmail, Notion, GitHub, Stripe, etc.
 
+## If you're a subagent
+
+If this skill was loaded inside a subagent spawned by a lead, the rules below apply to YOUR research, not the lead's. The lead delegated to you precisely because your retrieval shouldn't pollute main context. Follow the discipline:
+
+1. Run `date -I` once and stamp every version-specific claim with that ISO date (or the user's specified reference if the lead passed one).
+2. Use `mcp__docfork__*` / `mcp__deepwiki__*` / `mcp__github__*` — don't fabricate from training data.
+3. Cite inline next to each claim.
+4. Respect the word/token budget the lead gave you. The bigger the budget you burn here, the less context the lead has left.
+5. Return a distilled answer, not the raw pages you fetched. The pages stay in your context; only your answer goes to the lead.
+
 ## Delegate to a subagent when research is heavy
 
 Main-chat context is finite and expensive. Research tends to pull in long documents, multi-page search results, and full source files that balloon the transcript. Before doing research inline, check whether it should be a subagent call:

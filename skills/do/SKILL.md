@@ -29,6 +29,24 @@ If you notice partway through a turn that you didn't invoke them at Phase 0, inv
 
 The `pre-research-check.sh` hook (PreToolUse on WebSearch / WebFetch / mcp__docfork__* / mcp__deepwiki__* / mcp__github__*) emits an advisory to stderr if a research tool fires before `Skill("research-first")` has been invoked this turn. Treat the advisory as a correction prompt — invoke the skill, then retry.
 
+### Subagents inherit nothing — instruct them to self-load
+
+Subagents spawned via `Agent(...)` start with a **fresh context**. They do NOT inherit main's loaded skills. Main's `Skill("research-first")` invocation only applies to main.
+
+So when main delegates work to a subagent, the `Agent(prompt: ...)` call MUST include a Phase-0 preamble for the subagent:
+
+```
+Before any tool call, invoke these in parallel:
+  Skill(skill: "karpathy-guidelines")
+  Skill(skill: "research-first")       ← include when the subagent does research
+  Skill(skill: "coding-style")         ← include when the subagent writes/edits code
+Then proceed with the task below.
+---
+<actual task>
+```
+
+Rule of thumb: whichever of the three base skills applies to the subagent's work, name it in the preamble. The subagent invokes them itself at its own Phase 0; main doesn't forward skill content, just the instruction to load.
+
 ## Phase 1 — Classify the task (fast)
 
 Read the user's request and decide which bucket fits best:
