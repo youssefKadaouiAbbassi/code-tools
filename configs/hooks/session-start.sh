@@ -66,7 +66,6 @@ banner_body() {
   mul_front="http://localhost:${MULTICA_FRONTEND_PORT:-3333}"
   mul_back="http://localhost:${MULTICA_BACKEND_PORT:-8080}"
   mem_url="http://localhost:37777"
-  cc_url="http://localhost:${CCFLARE_PORT:-8787}/dashboard"
 
   printf '\n%sLocal tools%s %s(click to open)%s\n' "$BOLD" "$RESET" "$DIM" "$RESET"
   render() {
@@ -77,7 +76,6 @@ banner_body() {
   render "multica (frontend)"    "$mul_front"
   render "multica (backend API)" "$mul_back"
   render "claude-mem (observer)" "$mem_url"
-  render "ccflare (cost/usage)"  "$cc_url"
 }
 
 autoskills_seed_if_missing

@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Installers for the 11 **category components** of the Ultimate Claude Code System v12. Each module is a self-contained `ComponentCategory` that exports (a) a category metadata object and (b) an `install(env, dryRun)` function. The `index.ts` barrel exposes two tier buckets — `RECOMMENDED_CATEGORIES` (8) and `OPTIONAL_CATEGORIES` (3) — plus the dynamic `installCategory()` dispatcher used by `src/commands/`.
+Installers for the 10 **category components** of the Ultimate Claude Code System v12. Each module is a self-contained `ComponentCategory` that exports (a) a category metadata object and (b) an `install(env, dryRun)` function. The `index.ts` barrel exposes two tier buckets — `RECOMMENDED_CATEGORIES` (8) and `OPTIONAL_CATEGORIES` (2) — plus the dynamic `installCategory()` dispatcher used by `src/commands/`.
 
 Every category installer is expected to be **idempotent**, register MCP servers via `registerMcp()` (which verifies the registration landed), and respect `dryRun`.
 
@@ -16,12 +16,11 @@ Every category installer is expected to be **idempotent**, register MCP servers 
 | `code-intel.ts` | recommended | Serena (6), ast-grep (7) | `uv tool install serena-agent` (installs `uv` first if missing) + brew/cargo `ast-grep`; registers `serena` stdio MCP |
 | `browser-web.ts` | recommended | Playwright (8), Crawl4AI (9), Docfork (10), DeepWiki (11) | `npm i -g @playwright/cli`, `pip install 'crawl4ai>=0.8.6'`, registers `docfork` stdio MCP (needs `DOCFORK_API_KEY`) and `deepwiki` HTTP MCP |
 | `memory-context.ts` | recommended | claude-mem (12), context-mode (13), claude-hud (14) | `npx claude-mem install` + registers MCP **bound to `127.0.0.1`**; registers `context-mode` stdio MCP; installs `claude-hud` plugin + wires statusline |
-| `cc-plugins.ts` | recommended | Anthropic official plugins (200+) | Adds `anthropics/claude-plugins-official` marketplace; installs feature-dev, code-review, pr-review-toolkit, code-simplifier, commit-commands, claude-code-setup, claude-md-management, frontend-design, playground, skill-creator; then installs real LSP binaries for detected runtimes |
+| `cc-plugins.ts` | recommended | Anthropic official plugins | Adds `anthropics/claude-plugins-official` marketplace; installs feature-dev, code-review, pr-review-toolkit, code-simplifier, commit-commands, claude-code-setup, claude-md-management, frontend-design, playground, skill-creator, **session-report** (behavioral observability — HTML report from local JSONL transcripts); then installs real LSP binaries for detected runtimes |
 | `skills-registry.ts` | recommended | skills.sh seed bundle | `npx skills add` for find-skills, caveman, karpathy-guidelines, playwright-cli |
 | `security.ts` | recommended | Snyk MCP (5), container-use (15) | `npm i -g snyk@latest` + `snyk mcp configure --tool=claude-cli`; brew/curl install Dagger's `container-use` |
 | `github.ts` | recommended | gh (16), github-mcp (17), claude-code-action (18), claude-code-review (19) | brew/apt/pacman/dnf `gh`; registers `github` HTTP MCP (needs `GITHUB_PAT`); others are guidance-only (GH Actions / native CC feature gated on `claude >= 2.1.104`) |
 | `workstation.ts` | recommended | Ghostty (36), tmux (37), chezmoi (39), age (41) | brew/pacman/curl Ghostty; **verifies tmux only** (installed by primordial); brew/curl chezmoi; brew/binary-download `age` |
-| `observability.ts` | optional | Native Telemetry (23), ccflare (24) | Verifies `OTEL_EXPORTER_OTLP_ENDPOINT` / `CLAUDE_CODE_ENABLE_TELEMETRY` env vars (primordial sets them); clones snipeship/ccflare + `bun build` + writes launcher. No systemd auto-start — user runs `ccflare --serve` when they want it. |
 | `orchestration.ts` | optional | Agent Teams (25), Multica (26) | Verifies `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` env var (primordial); runs multica upstream install.sh `--with-server` (CLI + docker-compose stack) |
 | `workflow.ts` | optional | Composio (35) | Auto-bootstraps Composio MCP server via HTTP POST to backend.composio.dev (needs `COMPOSIO_API_KEY`), then registers HTTP MCP |
 

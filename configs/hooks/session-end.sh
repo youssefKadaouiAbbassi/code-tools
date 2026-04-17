@@ -35,12 +35,7 @@ fi
   printf '%s\n' '---'
 } >> "$log_file"
 
-ccflare_port="${CCFLARE_PORT:-8787}"
-if curl -sf --max-time 1 "http://localhost:${ccflare_port}/health" >/dev/null 2>&1; then
-  printf 'Session logged to %s. Cost for this session: see http://localhost:%s/dashboard\n' "$log_file" "$ccflare_port" >&2
-else
-  printf 'Session logged to %s\n' "$log_file" >&2
-fi
+printf 'Session logged to %s\n' "$log_file" >&2
 
 find "$log_dir" -type f -name '*.log' -mtime +30 -delete 2>/dev/null || true
 

@@ -28,7 +28,7 @@ Parent spec: [`../AGENTS.md`](../AGENTS.md) — stack decisions, tier model, and
 | Directory | Contents |
 |-----------|----------|
 | `commands/` | `citty` command adapters wired into `bin/setup.ts`: `setup.ts` (interactive + `--non-interactive` + `--dry-run` flows), `status.ts`, `restore.ts`. These are the only things `bin/` imports; they call into the modules above. |
-| `components/` | 11 category installer modules (`browser-web`, `cc-plugins`, `code-intel`, `github`, `memory-context`, `observability`, `orchestration`, `security`, `skills-registry`, `workflow`, `workstation`) plus the `index.ts` barrel that exports `RECOMMENDED_CATEGORIES`, `OPTIONAL_CATEGORIES`, `ALL_CATEGORIES`, and `installCategory`. See [`components/AGENTS.md`](components/AGENTS.md) for the per-module contract. |
+| `components/` | 10 category installer modules (`browser-web`, `cc-plugins`, `code-intel`, `github`, `memory-context`, `orchestration`, `security`, `skills-registry`, `workflow`, `workstation`) plus the `index.ts` barrel that exports `RECOMMENDED_CATEGORIES`, `OPTIONAL_CATEGORIES`, `ALL_CATEGORIES`, and `installCategory`. See [`components/AGENTS.md`](components/AGENTS.md) for the per-module contract. |
 
 ## Module Graph
 

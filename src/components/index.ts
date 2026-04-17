@@ -8,7 +8,6 @@ import { securityCategory } from "./security.js";
 import { githubCategory } from "./github.js";
 import { workstationCategory } from "./workstation.js";
 import { ccPluginsCategory } from "./cc-plugins.js";
-import { observabilityCategory } from "./observability.js";
 import { orchestrationCategory } from "./orchestration.js";
 import { workflowCategory } from "./workflow.js";
 import { skillsRegistryCategory } from "./skills-registry.js";
@@ -27,7 +26,6 @@ export const RECOMMENDED_CATEGORIES: ComponentCategory[] = [
 ];
 
 export const OPTIONAL_CATEGORIES: ComponentCategory[] = [
-  observabilityCategory,
   orchestrationCategory,
   workflowCategory,
 ];
@@ -91,10 +89,6 @@ export async function installCategory(
     case "workstation": {
       const { install } = await import("./workstation.js");
       return install(env, dryRun, skippedComponents);
-    }
-    case "observability": {
-      const { install } = await import("./observability.js");
-      return install(env, dryRun);
     }
     case "orchestration": {
       const { install } = await import("./orchestration.js");

@@ -55,9 +55,20 @@ Shell scripts wired into user-scope `settings.json` by `installPrimordial` under
 | `pre-secrets-guard.sh` | PreToolUse(any) | Blocks tool input containing AWS/GitHub/Stripe/Anthropic/OpenAI (legacy + `sk-proj-` + `sk-svcacct-`)/OpenRouter/Groq/xAI/Google/Slack/npm keys, PEM/OpenSSH/EC keys, JWTs, Bash-level `.env` access, DB URLs with embedded passwords. Read-tool `.env` access is blocked by settings.json deny | **Yes** |
 | `pre-pr-gate.sh` | PreToolUse(Bash) | Matches `gh pr create` and `git push`. Blocks push-to-default-branch; advises on >500-line diffs and no-recent-test-runs | **Yes** (on default-branch push) |
 | `post-lint-gate.sh` | PostToolUse(Write\|Edit\|MultiEdit) | Auto-runs biome (if `biome.json` present) or eslint, plus ruff/clippy/go-vet/shellcheck per extension. Scoped to files under the current git root; prints advisory to stderr | No (advisory) |
-| `session-start.sh` | SessionStart | Banner with date, repo, branch, today's session count, `tasks/lessons.md` head, clickable local-tool URLs (multica, claude-mem, ccflare). Silently runs `npx autoskills -y` in the background when a git project has no `.claude/skills/` dir. Emits via `{"systemMessage": …}` so CC renders a visible panel | No |
-| `session-end.sh` | SessionEnd | Appends session metadata to `~/.claude/session-logs/{date}.log`. Purges logs older than 30 days. If ccflare is reachable at its port, points the user to the dashboard for session cost | No |
+| `session-start.sh` | SessionStart | Banner with date, repo, branch, today's session count, `tasks/lessons.md` head, clickable local-tool URLs (multica, claude-mem). Silently runs `npx autoskills -y` in the background when a git project has no `.claude/skills/` dir. Emits via `{"systemMessage": …}` so CC renders a visible panel | No |
+| `session-end.sh` | SessionEnd | Appends session metadata to `~/.claude/session-logs/{date}.log`. Purges logs older than 30 days | No |
 | `stop-summary.sh` | Stop | Scans files modified in the last 5 minutes for `console.log`, `debugger`, `TODO`/`FIXME`, `pdb.set_trace`, `binding.pry`, `print()` | No (advisory) |
+
+### Observability story
+
+We deliberately ship no dedicated observability category. The behavioral surface is covered by layered existing tooling:
+
+- **Claude Code native**: `/cost` (API-user session cost), `/stats` (Max/Pro usage patterns).
+- **`session-report` plugin** (installed via `cc-plugins.ts` from `anthropics/claude-plugins-official`): Skill-activated; parses `~/.claude/projects/**/*.jsonl` and generates a self-contained HTML report of tokens, cache efficiency, subagents, skills, top prompts. Zero services.
+- **`claude-hud`** (installed via `memory-context.ts`): statusline reads `rate_limits` + `cost.total_cost_usd` from CC stdin; always-on limit bar.
+- **`claude-mem`** (installed via `memory-context.ts`): hybrid SQLite + Chroma store of every tool call; searchable via MCP; web viewer at `localhost:37777`; `claude-mem:timeline-report` skill for narrative history.
+- **OTEL export** (primordial sets `CLAUDE_CODE_ENABLE_TELEMETRY=1` + `OTEL_EXPORTER_OTLP_ENDPOINT`-ready): user wires up `anthropics/claude-code-monitoring-guide`'s docker-compose + Grafana dashboards (25052 / 24993 on grafana.com) when they want persistent multi-session analytics.
+- **Multi-account OAuth rotation**: genuinely unsolved by any Anthropic-sanctioned tool. Community options (`tombii/better-ccflare`, `CaddyGlow/ccproxy-api`) exist but are single-maintainer — we do not install them; users opt in via `npm install -g <pkg>` after evaluating trust themselves.
 
 ### `project-claude/hooks/` (project-scope, deployed under `--local`)
 

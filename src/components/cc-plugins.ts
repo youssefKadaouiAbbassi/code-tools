@@ -20,6 +20,7 @@ const CORE_PLUGINS = [
   "frontend-design",
   "playground",
   "skill-creator",
+  "session-report",
 ];
 
 // LSP plugins from claude-plugins-official are stubs without plugin.json;
