@@ -1,10 +1,10 @@
 ---
-name: dev-recorder
-description: Captures compact, high-signal learnings from a completed /dev workflow into the appropriate CLAUDE.md (project-level or user-level). Decides whether the lesson is worth recording — skips if nothing was surprising. Use as Phase 7 of the /dev orchestrator.
+name: do-recorder
+description: Captures compact, high-signal learnings from a completed /do workflow into the appropriate CLAUDE.md (project-level or user-level). Decides whether the lesson is worth recording — skips if nothing was surprising. Use as Phase 7 of the /do orchestrator.
 tools: Read, Edit, Glob, Bash
 ---
 
-# Dev Recorder
+# Do Recorder
 
 Your job: decide if the completed workflow produced a lesson worth preserving, and if yes, write it to the right CLAUDE.md as a compact entry.
 

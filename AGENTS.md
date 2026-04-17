@@ -70,9 +70,9 @@ Each subdirectory has its own `AGENTS.md` (or should) with the detailed contract
 | `src/` | Installer source — `types.ts`, `utils.ts`, `detect.ts`, `backup.ts`, `primordial.ts`, `verify.ts`, `status.ts`, `restore.ts`, plus `commands/` and `components/` subtrees |
 | `src/components/` | 13 category installers (code-intel, browser-web, memory-context, cc-plugins, skills-registry, security, github, workstation, observability, orchestration, design, knowledge, workflow) exported through `index.ts` barrel |
 | `configs/` | Templates deployed by `primordial.ts` — `home-claude/`, `project-claude/`, `hooks/`, plus `tmux.conf`, `starship.toml`, `statusline.sh` |
-| `agents/` | /dev orchestrator subagents (dev-classifier, dev-clarifier, dev-recorder) deployed to `~/.claude/agents/` |
-| `skills/` | Orchestration skills (dev, ship-feature, fix-bug, refactor-safely, security-audit, onboard-codebase, tdd-first, doc-hygiene, ci-hygiene, knowledge-base) deployed to `~/.claude/skills/` |
-| `commands/` | User-level slash commands (/dev) deployed to `~/.claude/commands/` |
+| `agents/` | /do orchestrator subagents (do-classifier, do-clarifier, do-recorder) deployed to `~/.claude/agents/` |
+| `skills/` | Orchestration skills (do, team-do, ship-feature, fix-bug, refactor-safely, security-audit, onboard-codebase, tdd-first, doc-hygiene, ci-hygiene, knowledge-base, release-cut, setup, loop-patterns, worktree-task) deployed to `~/.claude/skills/` |
+| `commands/` | User-level slash commands (/do) deployed to `~/.claude/commands/` |
 | `tests/` | `unit/`, `integration/`, `e2e/`, `behavioral/`, `scenarios/`, `ci/` (bats), `fixtures/` — uses `bun test`, `@gmrchk/cli-testing-library`, and `testcontainers` |
 | `tasks/` | `lessons.md` — corrections log the installer itself respects (repo's own dogfooding) |
 | `.claude-plugin/` | `plugin.json` — Claude Code plugin manifest exposing the installer as a plugin |

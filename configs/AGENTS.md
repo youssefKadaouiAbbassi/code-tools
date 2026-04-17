@@ -21,7 +21,8 @@ This directory is **the primordial tier** — files here install silently with n
 |-----|--------|---------|
 | `home-claude/` | `~/.claude/` | User-scope Claude Code config — global defaults for all projects |
 | `project-claude/` | `<project>/.claude/` | Project-scope Claude Code config — per-repo overrides and project hooks |
-| `hooks/` | `~/.claude/hooks/` | User-scope hook scripts (PreToolUse, PostToolUse, Notification, Stop) referenced by `home-claude/settings.json` |
+| `hooks/` | `~/.claude/hooks/` | User-scope hook scripts (PreToolUse, PostToolUse, PreCompact, PostCompact, StopFailure, PermissionDenied, FileChanged, CwdChanged, Elicitation, SessionStart, SessionEnd, Stop) referenced by `home-claude/settings.json` |
+| `plugins/code-tools-health/` | manual `claude plugin install <path>` | Reference implementation of the Claude Code `monitors` manifest key (v2.1.105+). One monitor — `primordial-install-health` — that notifies when hooks drift, `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is unset, or the Serena MCP registration is missing. Not auto-installed; opt-in. |
 
 ### `home-claude/` — used when installer runs with `--global` (default)
 

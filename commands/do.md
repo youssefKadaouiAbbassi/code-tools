@@ -4,7 +4,7 @@ allowed-tools: Task, AskUserQuestion, Read, Edit, Bash, Glob, Grep
 argument-hint: [task description or leave blank to use previous message]
 ---
 
-# /dev — Ultimate Dev Orchestrator
+# /do — Ultimate Dev Orchestrator
 
 You are orchestrating a complete development task. Use this workflow for any non-trivial coding request.
 
@@ -41,7 +41,7 @@ Agent Teams is enabled (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` set by primordi
 - Are external systems or secrets involved? (prod DB, API keys, filesystem)
 - If the task mentions a library / framework — do I know its current API?
 
-If ANY are unclear AND the task is non-trivial: spawn `dev-clarifier` subagent with the task. It will produce at most 3 clarifying questions. Pause, ask the user, continue after answers.
+If ANY are unclear AND the task is non-trivial: spawn `do-clarifier` subagent with the task. It will produce at most 3 clarifying questions. Pause, ask the user, continue after answers.
 
 **Skip Phase 1 for:**
 - One-line edits, typo fixes, config tweaks
@@ -52,7 +52,7 @@ If ANY are unclear AND the task is non-trivial: spawn `dev-clarifier` subagent w
 
 These are data-independent — both only need the clarified task. **Launch them in ONE message as parallel Task calls.**
 
-- **Task call A:** spawn `dev-classifier` with the clarified task → returns classification
+- **Task call A:** spawn `do-classifier` with the clarified task → returns classification
 - **Task call B:** spawn a `general-purpose` agent to run `/claude-mem:mem-search` with 2-3 key terms → returns any prior findings
 
 Classification returns ONE of:
@@ -131,7 +131,7 @@ After the sub-skill's review phase, decide:
 
 ## Phase 7 — Record learnings
 
-Spawn `dev-recorder` subagent with:
+Spawn `do-recorder` subagent with:
 - The original task (post-clarification)
 - The classification
 - What worked (tools used, patterns that succeeded)
@@ -161,5 +161,5 @@ Tell the user:
 
 - Routing every request through heavy workflows (see Phase 1 skip conditions)
 - Re-running all reviewers in Phase 5 when only one flagged
-- Capturing noise into CLAUDE.md (dev-recorder decides if the lesson is worth writing)
+- Capturing noise into CLAUDE.md (do-recorder decides if the lesson is worth writing)
 - Installing parallel orchestration frameworks (you already have this)

@@ -21,10 +21,11 @@ const CORE_PLUGINS = [
   "playground",
   "skill-creator",
   "session-report",
+  "plugin-dev",
 ];
 
-// LSP plugins from claude-plugins-official are stubs without plugin.json;
-// we install the real language-server binaries directly (see installRealLspBinaries).
+// Per-language LSP plugins in the marketplace are README-only (no plugin.json,
+// no install logic); we install the real binaries ourselves via installRealLspBinaries.
 const LSP_PLUGINS: string[] = [];
 
 const ALL_PLUGINS = [...CORE_PLUGINS, ...LSP_PLUGINS];
@@ -35,7 +36,7 @@ export const ccPluginsCategory: ComponentCategory = {
   id: "cc-plugins",
   name: "Claude Code Plugins",
   tier: "recommended",
-  description: `${TOTAL_PLUGIN_COUNT} curated plugins: Anthropic official (feature-dev, code-review, security-guidance, 12 LSPs, etc.) + Karpathy's LLM-coding principles`,
+  description: `${TOTAL_PLUGIN_COUNT} curated Anthropic-official plugins (feature-dev, code-review, pr-review-toolkit, session-report, plugin-dev, etc.) + stack-matched LSP binaries`,
   defaultEnabled: true,
   components: [
     ...ALL_PLUGINS.map((name, i) => ({

@@ -1,10 +1,10 @@
 ---
-name: dev-clarifier
-description: Decides whether a coding task needs clarifying questions, and if so, produces at most 3 focused questions that will materially change how the task is executed. Use as Phase 1 of the /dev orchestrator. Only fires when the task is non-trivial AND has real ambiguity.
+name: do-clarifier
+description: Decides whether a coding task needs clarifying questions, and if so, produces at most 3 focused questions that will materially change how the task is executed. Use as Phase 1 of the /do orchestrator. Only fires when the task is non-trivial AND has real ambiguity.
 tools: Read, Glob, Grep, AskUserQuestion
 ---
 
-# Dev Clarifier
+# Do Clarifier
 
 Your job: decide if clarification is needed. If yes, ask at most 3 focused questions that would MATERIALLY change how the task is executed. If no, say so and step aside.
 

@@ -248,6 +248,38 @@ async function deployHooks(env: DetectedEnvironment, dryRun: boolean): Promise<I
     if (hookFilenames.has("stop-summary.sh")) {
       hooksConfig.Stop = [{ hooks: [cmd("stop-summary.sh")] }];
     }
+    if (hookFilenames.has("pre-compact.sh")) {
+      hooksConfig.PreCompact = [{ hooks: [cmd("pre-compact.sh")] }];
+    }
+    if (hookFilenames.has("post-compact.sh")) {
+      hooksConfig.PostCompact = [{ hooks: [cmd("post-compact.sh")] }];
+    }
+    if (hookFilenames.has("stop-failure.sh")) {
+      hooksConfig.StopFailure = [{ hooks: [cmd("stop-failure.sh")] }];
+    }
+    if (hookFilenames.has("permission-denied.sh")) {
+      hooksConfig.PermissionDenied = [{ hooks: [cmd("permission-denied.sh")] }];
+    }
+    if (hookFilenames.has("cwd-changed.sh")) {
+      hooksConfig.CwdChanged = [{ hooks: [cmd("cwd-changed.sh")] }];
+    }
+    if (hookFilenames.has("elicitation.sh")) {
+      hooksConfig.Elicitation = [{ hooks: [cmd("elicitation.sh")] }];
+    }
+    if (hookFilenames.has("file-changed.sh")) {
+      hooksConfig.FileChanged = [
+        { matcher: "\\.env|\\.env\\.local|\\.mcp\\.json|settings\\.local\\.json", hooks: [cmd("file-changed.sh")] },
+      ];
+    }
+    if (hookFilenames.has("task-created.sh")) {
+      hooksConfig.TaskCreated = [{ hooks: [cmd("task-created.sh")] }];
+    }
+    if (hookFilenames.has("task-completed.sh")) {
+      hooksConfig.TaskCompleted = [{ hooks: [cmd("task-completed.sh")] }];
+    }
+    if (hookFilenames.has("teammate-idle.sh")) {
+      hooksConfig.TeammateIdle = [{ hooks: [cmd("teammate-idle.sh")] }];
+    }
 
     await mergeJsonFile(settingsPath, { hooks: hooksConfig });
 
@@ -440,6 +472,7 @@ async function enableTelemetry(env: DetectedEnvironment, dryRun: boolean): Promi
   const lines = [
     "export CLAUDE_CODE_ENABLE_TELEMETRY=1",
     "export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
+    "export CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1",
   ];
 
   if (dryRun) {

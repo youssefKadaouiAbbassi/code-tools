@@ -11,6 +11,7 @@ import { ccPluginsCategory } from "./cc-plugins.js";
 import { orchestrationCategory } from "./orchestration.js";
 import { workflowCategory } from "./workflow.js";
 import { skillsRegistryCategory } from "./skills-registry.js";
+import { trailofbitsCategory } from "./trailofbits.js";
 
 // --- Exported category lists ---
 
@@ -28,6 +29,7 @@ export const RECOMMENDED_CATEGORIES: ComponentCategory[] = [
 export const OPTIONAL_CATEGORIES: ComponentCategory[] = [
   orchestrationCategory,
   workflowCategory,
+  trailofbitsCategory,
 ];
 
 export const ALL_CATEGORIES: ComponentCategory[] = [
@@ -96,6 +98,10 @@ export async function installCategory(
     }
     case "workflow": {
       const { install } = await import("./workflow.js");
+      return install(env, dryRun);
+    }
+    case "trailofbits": {
+      const { install } = await import("./trailofbits.js");
       return install(env, dryRun);
     }
     default:

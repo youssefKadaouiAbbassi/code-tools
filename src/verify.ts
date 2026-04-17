@@ -12,15 +12,26 @@ const MCP_SERVER_NAMES: string[] = [];
 const HOOK_FILES = [
   "pre-secrets-guard.sh",
   "pre-destructive-blocker.sh",
+  "pre-pr-gate.sh",
   "post-lint-gate.sh",
   "session-start.sh",
   "session-end.sh",
   "stop-summary.sh",
+  "pre-compact.sh",
+  "post-compact.sh",
+  "stop-failure.sh",
+  "permission-denied.sh",
+  "cwd-changed.sh",
+  "elicitation.sh",
+  "file-changed.sh",
+  "task-created.sh",
+  "task-completed.sh",
+  "teammate-idle.sh",
 ];
 
 export async function verifyComponent(
   component: Component,
-  env: DetectedEnvironment
+  _env: DetectedEnvironment
 ): Promise<VerificationResult> {
   try {
     await $`sh -c ${component.verifyCommand}`.quiet();

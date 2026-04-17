@@ -1,10 +1,10 @@
 ---
-name: dev-classifier
-description: Classifies a coding task into one of the installed workflow categories (ship-feature, fix-bug, refactor-safely, security-audit, onboard-codebase, trivial, split). Returns a single classification + a one-line rationale. Use as Phase 2 of the /dev orchestrator.
+name: do-classifier
+description: Classifies a coding task into one of the installed workflow categories (ship-feature, fix-bug, refactor-safely, security-audit, onboard-codebase, trivial, split). Returns a single classification + a one-line rationale. Use as Phase 2 of the /do orchestrator.
 tools: Read, Glob, Grep
 ---
 
-# Dev Classifier
+# Do Classifier
 
 Your job: classify a coding task into EXACTLY ONE category. No waffling, no multi-classifying. The orchestrator depends on a single decision.
 

@@ -1,9 +1,9 @@
 ---
-name: dev
+name: do
 description: Front-door entry skill for ANY coding task. Use whenever the user asks to build, fix, refactor, review, audit, understand, or otherwise work on code. Classifies the request, applies karpathy-guidelines, routes to the right sub-workflow (ship-feature, fix-bug, refactor-safely, security-audit, onboard-codebase), and keeps the full toolkit (Anthropic-official plugins, MCPs, auto-installed LSPs, 11 custom skills, hooks) in-context. This is the skill to activate first on almost every coding turn.
 ---
 
-# Dev — the front door
+# Do — the front door
 
 Single entry point for coding work. Figures out what the user wants, applies the principles, routes to the right workflow, and keeps the full toolkit visible so nothing gets forgotten.
 
@@ -34,12 +34,42 @@ When ambiguous, pick based on whether existing behavior changes:
 - Behavior preserved → refactor-safely
 - No code change, just understanding → onboard-codebase
 
+### Phase 1b — Team vs Subagent decision
+
+Pick based on **what the work needs to get done correctly**. Not based on cost — cost is not your concern.
+
+| What the work needs | Use |
+|---|---|
+| Independent parallel reads that all return once (explore + lint + test + scan) | **Subagents** — N parallel `Agent()` calls in one message |
+| One-shot specialist reviews that don't argue with each other | **Subagents** |
+| Multi-turn coordination — an agent's output at turn 2 depends on another's at turn 1 | **Team** |
+| Debate / competing hypotheses — agents must send messages to each other | **Team** |
+| Verify → fix loop where reviewers keep prior findings across iterations | **Team** |
+| Staged pipeline with handoff docs between phases (plan → exec → verify → fix) | **Team** |
+
+Upgrade to **team** (via `team-do`) when **≥2 of these** are true:
+
+- Work spans multiple turns and teammates must retain prior-turn state to produce the right output
+- Task has a genuine debate dimension — "which approach is better", competing hypotheses, architecture decision
+- Staged pipeline with handoff between phases (plan → exec → verify → fix)
+- Teammates need to message each other (not just the lead) or share a task list
+- Verify-heavy task with a bounded fix loop where reviewers keep findings across iterations
+
+**Hard refusal — skip team mode if ANY of these:**
+- `DEV_TEAM_WORKER=1` in env (this session is already a teammate)
+- Session was spawned with `team_name` param (you're a worker, not a lead)
+- Work is one-shot and parallel `Agent()` fan-out produces the right answer in one pass
+- The primary bucket is `onboard-codebase` (research doesn't parallelize across turns)
+
+When the upgrade fires, route to `team-do` via `Skill(skill: "team-do", args: "<original task>")` — it owns the stage pipeline (plan → exec → verify → fix). Otherwise, the matched single-shot skill (`ship-feature` / `fix-bug` / etc.) uses parallel `Agent()` fan-out internally where appropriate.
+
 ## Phase 2 — Route via the Skill tool
 
 **Invoke the matched sub-skill using the `Skill` tool** — this is the proper activation mechanism, not a "read the SKILL.md" approximation. The sub-skill runs with full context integration and returns its results.
 
 | Matched bucket | Invocation |
 |---|---|
+| team-do (Phase 1b fired) | `Skill(skill: "team-do", args: "<task>")` |
 | ship-feature | `Skill(skill: "ship-feature", args: "<task>")` |
 | fix-bug | `Skill(skill: "fix-bug", args: "<task>")` |
 | refactor-safely | `Skill(skill: "refactor-safely", args: "<task>")` |
@@ -75,7 +105,7 @@ Your installed plugins expose these commands:
 - **pr-review-toolkit plugin:** code-reviewer, code-simplifier, comment-analyzer, pr-test-analyzer, silent-failure-hunter, type-design-analyzer
 - **code-simplifier plugin:** code-simplifier
 - **Built-in:** Explore (fast code mapping), Plan (architecture planning), general-purpose (catch-all), claude-code-guide (meta questions)
-- **Custom:** dev-classifier, dev-clarifier, dev-recorder (our /dev orchestrator)
+- **Custom:** do-classifier, do-clarifier, do-recorder (our /do orchestrator)
 
 ### MCP servers (auto-invoked by Claude when relevant)
 - **serena** — semantic code analysis, symbol resolution, cross-module refs (LSP-backed)
@@ -97,11 +127,14 @@ Your installed plugins expose these commands:
 ### Skills (auto-activate when description matches)
 - **karpathy-guidelines** — behavioral principles (always on)
 - **Our custom — primary routes (Phase 1 classification):** `ship-feature`, `fix-bug`, `refactor-safely`, `security-audit`, `onboard-codebase`
+- **Our custom — team upgrade (Phase 1b):** `team-do` — native `TeamCreate` parallel workflow for multi-subsystem / debate / verify-heavy tasks. Never invoked directly by users; only via `/do` classifier upgrade.
 - **Our custom — complementary sub-skills (chained mid-workflow, not primary routes):**
   - `tdd-first` — red → green → refactor. Invoked by `ship-feature`/`fix-bug` when correctness matters.
   - `doc-hygiene` — brevity + no filler on docs. Invoked when any README/CHANGELOG/CLAUDE.md is touched.
   - `ci-hygiene` — pinned versions, `--bare`, no Max-sub in CI. Invoked when `.github/workflows/*` or `Dockerfile` edited.
   - `knowledge-base` — Karpathy-style raw/ → wiki/ → output/ research workflow. Invoked for deep research tasks.
+  - `loop-patterns` — recipes for `/loop`, `CronCreate`, `ScheduleWakeup` recurring tasks. Invoked when user asks to "keep checking", "poll", "run every N min".
+  - `worktree-task` — `EnterWorktree`/`ExitWorktree` isolation for multi-file features. Invoked automatically by `ship-feature` for net-new features.
 - **Anthropic-official:** claude-md-improver, playground, frontend-design, claude-code-setup, skill-creator
 
 ### Hooks (fire automatically on every tool call / session event)

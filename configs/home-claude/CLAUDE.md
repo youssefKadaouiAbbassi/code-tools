@@ -66,7 +66,7 @@ After completing the primary task, Claude MUST end its reply with a single-line 
 | Edited a CI workflow / Dockerfile / deploy script | *"Want me to run `ci-hygiene` for pinned-version + secrets audit?"* |
 | Public-facing change (CLI flag, API signature, README) | *"Want me to update docs (`doc-hygiene`)?"* |
 | Refactor landed | *"Want me to run `simplify` skill + `code-simplifier` agent for a polish pass?"* |
-| Session produced new patterns worth remembering | *"Want me to capture this to `tasks/lessons.md` / claude-mem (`dev-recorder`)?"* |
+| Session produced new patterns worth remembering | *"Want me to capture this to `tasks/lessons.md` / claude-mem (`do-recorder`)?"* |
 | Any feature with runtime dependencies I haven't verified | *"Want me to boot the app in a browser and smoke-test it (`playwright-cli`)?"* |
 
 Format: one line, ends with `?`. No bullet list, no "would you like". Never more than two offers per turn. Silent when no follow-up fits.
@@ -75,7 +75,7 @@ Format: one line, ends with `?`. No bullet list, no "would you like". Never more
 
 Skills own MCP routing. Don't duplicate the list here.
 
-- Route coding work through `/dev` (front-door skill). It classifies → dispatches to sub-skill (`ship-feature` / `fix-bug` / `refactor-safely` / `security-audit` / `onboard-codebase`).
+- Route coding work through `/do` (front-door skill). It classifies → dispatches to sub-skill (`ship-feature` / `fix-bug` / `refactor-safely` / `security-audit` / `onboard-codebase`).
 - Each sub-skill declares which MCPs / subagents / tools it uses. Read the SKILL.md before second-guessing.
 - General rule: local tool first (`Read`, `Grep`, `gh`, `bun`, `uv`), MCP only when it saves tokens or reaches external state the CLI can't.
 
