@@ -33,10 +33,13 @@ const SCOPE_OWNERS = new Set([
   // This is the documented exception per Phase 5; destructive restore still goes through
   // the user confirmation flow before touching ~/.claude.
   "restore.ts",
+  // install-journal.ts owns ~/.config/code-tools/install.json — a per-user
+  // installer-state file, not scope-dependent. homedir() is the correct path root.
+  "install-journal.ts",
+  // update.ts reads homedir() only to detect `~/.npm/_npx/` invocation path for
+  // install-source heuristic; it never touches ~/.claude directly.
+  "update.ts",
 ]);
-
-// Files where "/.claude" literals are acceptable (user-facing messages, help text).
-const MESSAGE_ALLOWED = new Set(["setup.ts", "setup.ts (bin)"]);
 
 describe("scope isolation guardrails", () => {
   test("homedir() only called in install-mode.ts resolveClaudeDir", async () => {

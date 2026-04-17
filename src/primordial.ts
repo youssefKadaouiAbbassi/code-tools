@@ -243,18 +243,26 @@ async function deployHooks(env: DetectedEnvironment, dryRun: boolean): Promise<I
     ? join(getConfigsDir(), "project-claude", "hooks")
     : join(getConfigsDir(), "hooks");
   const hooksTargetDir = join(env.claudeDir, "hooks");
+  const manifestPath = join(hooksTargetDir, MANIFEST_NAME);
+
+  const hookFiles = await Array.fromAsync(
+    new Bun.Glob("*.{sh,js,ts,py}").scan({ cwd: hooksSourceDir, onlyFiles: true })
+  );
+  const previous = await readManifest(manifestPath);
+  const stale = previous.filter((name) => !hookFiles.includes(name));
 
   if (dryRun) {
-    log.info(`[dry-run] Would copy hook scripts from ${hooksSourceDir} to ${hooksTargetDir} and chmod +x`);
-    return { component, status: "skipped", message: `[dry-run] Would deploy hook scripts`, verifyPassed: false };
+    log.info(`[dry-run] Would deploy ${hookFiles.length} hook(s) to ${hooksTargetDir} with chmod 700`);
+    if (stale.length > 0) log.info(`[dry-run] Would remove ${stale.length} stale hook(s): ${stale.join(", ")}`);
+    return { component, status: "skipped", message: `[dry-run] Would deploy ${hookFiles.length} hooks, remove ${stale.length} stale`, verifyPassed: false };
   }
 
   try {
     await ensureDir(hooksTargetDir);
 
-    const hookFiles = await Array.fromAsync(
-      new Bun.Glob("*.{sh,js,ts,py}").scan({ cwd: hooksSourceDir, onlyFiles: true })
-    );
+    for (const name of stale) {
+      await $`rm -f ${join(hooksTargetDir, name)}`.quiet();
+    }
 
     for (const hookFile of hookFiles) {
       const src = join(hooksSourceDir, hookFile);
@@ -263,6 +271,7 @@ async function deployHooks(env: DetectedEnvironment, dryRun: boolean): Promise<I
       await $`chmod 700 ${dest}`.quiet();
     }
     await $`chmod 700 ${hooksTargetDir}`.quiet();
+    await writeManifest(manifestPath, hookFiles);
 
     const settingsPath = join(env.claudeDir, "settings.json");
     const hookFilenames = new Set(hookFiles);

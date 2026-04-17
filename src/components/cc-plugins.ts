@@ -9,7 +9,7 @@ const MARKETPLACE_NAME = "claude-plugins-official";
 
 const EXTRA_MARKETPLACES: Array<{ slug: string; marketplaceName: string; plugins: string[] }> = [];
 
-const CORE_PLUGINS = [
+export const CORE_PLUGINS = [
   "feature-dev",
   "code-review",
   "pr-review-toolkit",

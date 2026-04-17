@@ -55,11 +55,10 @@ const main = defineCommand({
     setup: () => import("../src/commands/setup.js").then((m) => m.default),
     status: () => import("../src/commands/status.js").then((m) => m.default),
     restore: () => import("../src/commands/restore.js").then((m) => m.default),
+    update: () => import("../src/commands/update.js").then((m) => m.default),
   },
   async run({ rawArgs }) {
-    // Default command = setup, but only when no subcommand was passed.
-    // citty calls parent `run` even when a subcommand matched, so we must guard.
-    const subcommandNames = ["setup", "status", "restore"];
+    const subcommandNames = ["setup", "status", "restore", "update"];
     const firstNonFlag = rawArgs.find((a) => !a.startsWith("-"));
     if (firstNonFlag && subcommandNames.includes(firstNonFlag)) {
       // Subcommand was matched and already executed by citty — do nothing.

@@ -453,6 +453,40 @@ async function runBatch(
   await reapplyHardenedSettings(env, dryRun);
   const report = await verifyAll(env, allResults);
   log.info(`Verification: ${report.passed} passed, ${report.failed} failed, ${report.skipped} skipped`);
+
+  if (!dryRun) await recordJournal(env, tier);
+}
+
+async function recordJournal(env: DetectedEnvironment, tier: string | undefined): Promise<void> {
+  const { writeJournal } = await import("../install-journal.js");
+  const { readFileSync } = await import("node:fs");
+  const pkgPath = join(getConfigsDir(), "..", "package.json");
+  let version = "0.0.0";
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
+    if (typeof pkg.version === "string") version = pkg.version;
+  } catch {}
+
+  const readDirManifest = async (dir: string): Promise<string[]> => {
+    try {
+      const m = JSON.parse(await Bun.file(join(env.claudeDir, dir, ".code-tools-managed.json")).text()) as { entries?: string[] };
+      return m.entries ?? [];
+    } catch { return []; }
+  };
+
+  const { CORE_PLUGINS } = await import("../components/cc-plugins.js");
+
+  await writeJournal({
+    version,
+    tier: (tier === "primordial" || tier === "recommended" || tier === "all") ? tier : "recommended",
+    scope: isLocalScope(env) ? "local" : "global",
+    installedAt: new Date().toISOString(),
+    plugins: CORE_PLUGINS.map((name) => ({ name, marketplace: "claude-plugins-official" })),
+    skills: await readDirManifest("skills"),
+    commands: await readDirManifest("commands"),
+    agents: await readDirManifest("agents"),
+    hooks: await readDirManifest("hooks"),
+  });
 }
 
 export default defineCommand({
