@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 description: Ultimate coding orchestrator. Runs the full dev workflow: clarify → classify → dispatch to sub-skill → execute with review loop → capture learnings.
 allowed-tools: Task, AskUserQuestion, Read, Edit, Bash, Glob, Grep
 argument-hint: [task description or leave blank to use previous message]

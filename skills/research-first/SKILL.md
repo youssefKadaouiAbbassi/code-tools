@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: research-first
 description: Enforce research-before-asserting on any library, framework, API, SDK, or external-system claim. Use ALWAYS before stating version-specific behavior, API shape, flag, config option, or "how does X work" for any third-party code — every time, no exceptions. Triggers on any mention of library/framework names (React, Vue, Next, Bun, Axum, Django, FastAPI, Polars, Prisma, etc.), version numbers, import/require statements being added, API method names that aren't clearly internal, changelogs, breaking changes, migration questions, or upstream-repo references. Forbids version-specific assertions without either (a) a preceding `docfork:search_docs` / `deepwiki:ask_question` / `github` MCP call whose result is cited inline, or (b) an explicit "current as of <ISO date>, training-cutoff unverified" disclaimer. Pins queries to a date/version when the user specifies one; defaults to today (ISO date from `$(date -I)`) when they don't.
 ---

@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: ship-feature
 description: End-to-end feature workflow for this system. Use when the user asks to build, implement, add, or ship a new feature. Chains feature-dev (plan → implement) → pr-review-toolkit (multi-agent review) → commit-commands (commit+push+PR). Do NOT use for simple edits, bug fixes, or refactors — this is for net-new feature work.
 ---

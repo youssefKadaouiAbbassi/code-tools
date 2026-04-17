@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: do
 description: Front-door entry skill for ANY coding task. Use whenever the user asks to build, fix, refactor, review, audit, understand, or otherwise work on code. Classifies the request, applies karpathy-guidelines, routes to the right sub-workflow (ship-feature, fix-bug, refactor-safely, security-audit, onboard-codebase), and keeps the full toolkit (Anthropic-official plugins, MCPs, auto-installed LSPs, 17 custom skills, hooks) in-context. This is the skill to activate first on almost every coding turn.
 ---

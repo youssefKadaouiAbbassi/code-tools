@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: do-classifier
 description: Classifies a coding task into one of the installed workflow categories (ship-feature, fix-bug, refactor-safely, security-audit, onboard-codebase, trivial, split). Returns a single classification + a one-line rationale. Use as Phase 2 of the /do orchestrator.
 tools: Read, Glob, Grep

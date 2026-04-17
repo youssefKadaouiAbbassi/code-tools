@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: tdd-first
 description: Enforces test-first discipline — red → green → refactor. Use when the user is about to fix a bug, implement core logic, or add a feature where correctness matters. Writes a failing test first, confirms it fails for the right reason, THEN allows implementation. Complements pr-review-toolkit:pr-test-analyzer (reactive) with proactive test-writing.
 ---

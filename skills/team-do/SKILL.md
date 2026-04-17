@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: team-do
 description: Spawns a persistent Agent Team (native TeamCreate) for work that actually splits — multi-subsystem features, debate-worthy architecture, parallel-reviewable diffs, or verification-heavy audits. Activates when the task touches ≥3 independent files OR involves multiple specialist roles (architect + reviewer + test-engineer) OR is a competing-hypotheses decision. Lead coordinates via SendMessage, teammates work assigned tasks in parallel, handoff docs persist across stages. Uses anthropics/claude-plugins-official feature-dev agents as teammates. Refuses to activate when DEV_TEAM_WORKER=1 or when the session is already running as a teammate — nested teams are forbidden.
 ---

@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: worktree-task
 description: One-worktree-per-task workflow using `EnterWorktree` / `ExitWorktree`. Activate when the user asks to work on a feature/fix in isolation, mentions "parallel branches", "keep master clean", "don't touch the current working tree", or when `/do:ship-feature` is about to start a net-new feature. Also activate when multiple concurrent tasks are running and their file edits could collide.
 ---

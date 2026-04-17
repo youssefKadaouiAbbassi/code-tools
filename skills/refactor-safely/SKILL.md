@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: refactor-safely
 description: Safe refactoring workflow using this system's installed plugins. Use when the user asks to refactor, clean up, simplify, deduplicate, extract, or reorganize existing code WITHOUT changing behavior. Not for bug fixes (use fix-bug) or new features (use ship-feature).
 ---

@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: release-cut
 description: Cut a new release of the current project — semver bump, tag, CHANGELOG entry, optional GitHub release. Use when user says "cut a release", "ship vX.Y.Z", "release this", "/release", or is otherwise preparing a tagged version. Defers to the `claude-mem:version-bump` plugin when present (it handles package.json / Cargo.toml / pyproject.toml / etc.) and adds CHANGELOG + GH-release wiring on top.
 ---

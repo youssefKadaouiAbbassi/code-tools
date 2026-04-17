@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: do-clarifier
 description: Decides whether a coding task needs clarifying questions, and if so, produces at most 3 focused questions that will materially change how the task is executed. Use as Phase 1 of the /do orchestrator. Only fires when the task is non-trivial AND has real ambiguity.
 tools: Read, Glob, Grep, AskUserQuestion

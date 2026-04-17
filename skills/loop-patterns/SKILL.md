@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: loop-patterns
 description: Recipes for `/loop`, `CronCreate`, and `ScheduleWakeup`. Activate when the user asks Claude to "keep checking", "poll", "run every N minutes", "wait until X", "babysit", "watch for", or describes a task that repeats on a cadence or needs to resume after a delay. Not a route for one-shot work — only for recurring/scheduled tasks.
 ---

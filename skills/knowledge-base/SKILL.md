@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: knowledge-base
 description: Karpathy's LLM-maintained knowledge-base workflow. Use when the user wants to research a topic, build a queryable wiki, compile notes into structured knowledge, or asks "compile what we know about X", "research Y deeply", "turn these sources into a knowledge base". Structures knowledge in raw/ → wiki/ → output/ directories. Fills the research-first gap the 5 core sub-skills don't cover.
 ---

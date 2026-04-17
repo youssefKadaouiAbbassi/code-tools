@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: doc-hygiene
 description: Documentation discipline for README, CLAUDE.md, docs/, changelogs, design docs. Use when editing or generating any markdown/rst/asciidoc intended for humans or future AI sessions. Enforces brevity (<50 lines unless structurally required), no filler phrases, dated verification, and deletes rules that the code already demonstrates. Complements karpathy-guidelines (general principles) and claude-md-management:claude-md-improver (CLAUDE.md-specific audits).
 ---

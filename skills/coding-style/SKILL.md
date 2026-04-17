@@ -1,4 +1,5 @@
 ---
+plugin: code-tools
 name: coding-style
 description: Enforce minimalist, self-documenting, defensively-sane coding style. Use ALWAYS when writing, editing, or reviewing ANY code in ANY language — every function, every edit, every diff, no exceptions. Covers five rules: (1) no comments unless critical (WHY only, never WHAT, never history), (2) clean + optimized (no dead code, no speculative abstractions, no stale imports, delete over deprecate), (3) self-documenting names (full words, verbs for functions, nouns for data), (4) smallest surface (one function one concern, extract only on 3rd reuse, validate only at boundaries), (5) no dead defense (no try/catch for impossible cases, no fallbacks for inputs you control, let errors bubble to the right handler). Pair with karpathy-guidelines for behavioral principles (Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution).
 paths: "**/*.{ts,tsx,js,jsx,py,go,rs,kt,java,rb,swift,sh,bash,zsh,fish,sql,php,cs,clj,ex,elm,ml,hs,scala,dart,c,cpp,h,hpp,lua,vim,nix,toml,yaml,yml,json,md}"
