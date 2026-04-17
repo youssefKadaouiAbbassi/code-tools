@@ -313,8 +313,15 @@ async function deployHooks(env: DetectedEnvironment, dryRun: boolean): Promise<I
     if (hookFilenames.has("session-end.sh")) {
       hooksConfig.SessionEnd = [{ hooks: [cmd("session-end.sh")] }];
     }
+    const stopHooks: Array<{ hooks: Array<{ type: string; command: string }> }> = [];
     if (hookFilenames.has("stop-summary.sh")) {
-      hooksConfig.Stop = [{ hooks: [cmd("stop-summary.sh")] }];
+      stopHooks.push({ hooks: [cmd("stop-summary.sh")] });
+    }
+    if (hookFilenames.has("stop-research-check.sh")) {
+      stopHooks.push({ hooks: [cmd("stop-research-check.sh")] });
+    }
+    if (stopHooks.length > 0) {
+      hooksConfig.Stop = stopHooks;
     }
     if (hookFilenames.has("pre-compact.sh")) {
       hooksConfig.PreCompact = [{ hooks: [cmd("pre-compact.sh")] }];

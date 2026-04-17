@@ -9,7 +9,7 @@ Single entry point for coding work. Figures out what the user wants, applies the
 
 ## Principles (always applied)
 
-Load both skills at Phase 0 of every coding task. They're complementary:
+Load all three skills at Phase 0 of every coding task. They're complementary:
 
 - `Skill(skill: "karpathy-guidelines")` — **behavioral** principles (how to *approach* the work):
   1. Think Before Coding — surface assumptions and tradeoffs explicitly
@@ -23,6 +23,13 @@ Load both skills at Phase 0 of every coding task. They're complementary:
   3. Self-documenting names (full words, verbs for functions, nouns for data)
   4. Smallest surface (one function one concern, rule-of-3 for extraction)
   5. No dead defense (no try/catch for impossible cases, let errors bubble)
+
+- `Skill(skill: "research-first")` — **research** discipline (how to *verify* library claims):
+  1. Any library / framework / API mention → MCP before speaking (docfork, deepwiki, github)
+  2. Pin the date or version — user's if specified, today's (`date -I`) otherwise
+  3. Cite inline next to each version-specific claim
+  4. "Unverified, training-cutoff" stamp when MCPs miss — never silently assert
+  5. Post-hoc audit via `stop-research-check.sh` hook catches slip-ups
 
 ## Phase 1 — Classify the task (fast)
 

@@ -42,6 +42,14 @@ Local tool still first when a 1-line CLI does it (`Read`, `Grep`, `gh`, `bun`, `
 
 **Verification loop rule**: for every library claim (API shape, flag, version behavior) Claude states, either (a) cite the docfork/deepwiki result inline OR (b) note "unverified, training-cutoff" and call the MCP before finalizing. Unsourced lib claims = lint failure.
 
+**Date-pinning rule (non-negotiable)**: every version-specific claim must resolve a reference date:
+
+- If the user specified a date, version, or timeframe → pin the MCP query to that reference. `github` MCP with `ref=<tag|sha>` for repo state. `docfork:search_docs` with version-qualified query (`react@18.3 useEffect`). `deepwiki` against a revision if supported.
+- If the user didn't specify → research is "today". Run `date -I` once at the start of the turn. Stamp claims with that ISO date ("current as of 2026-04-17, …").
+- **Never make a version-specific claim without EITHER a version pin, a date pin, or an explicit "unverified, training-cutoff" stamp.** Silent assertions on library behavior are a lint failure.
+
+The `research-first` skill (auto-activates on library/framework/API mentions) owns the full workflow + citation format. The `stop-research-check.sh` hook audits each turn post-hoc and warns on unsourced library claims.
+
 ### Skill-before-code rule (3-tier model)
 
 Before writing any procedure that *could* exist as a reusable skill (browser automation, CI config, OAuth flow, file format parsing, test harness, deployment recipe, etc.), check each tier in order:

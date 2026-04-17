@@ -17,6 +17,7 @@ const HOOK_FILES = [
   "session-start.sh",
   "session-end.sh",
   "stop-summary.sh",
+  "stop-research-check.sh",
   "pre-compact.sh",
   "post-compact.sh",
   "stop-failure.sh",
