@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
+import { join } from "node:path";
 
-const PROJECT_DIR = "/home/izno/code/perso/github.com/youssefKadaouiAbbassi/yka-code";
+const PROJECT_DIR = join(import.meta.dir, "..", "..");
 
 function runCli(...args: string[]) {
   const result = Bun.spawnSync(["bun", "run", "bin/setup.ts", ...args], {

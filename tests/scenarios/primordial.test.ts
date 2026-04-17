@@ -21,7 +21,7 @@ import {
   log,
 } from "../../src/utils.js";
 
-const PROJECT_DIR = "/home/izno/code/perso/github.com/youssefKadaouiAbbassi/yka-code";
+const PROJECT_DIR = join(import.meta.dir, "..", "..");
 const REAL_CONFIGS_DIR = join(PROJECT_DIR, "configs");
 const REAL_BACKUP_BASE = join(Bun.env.HOME ?? "~", ".claude-backup");
 
