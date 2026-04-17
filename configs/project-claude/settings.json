@@ -40,6 +40,6 @@
   },
   "effortLevel": "medium",
   "env": {
-    "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1"
+    "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "0"
   }
 }

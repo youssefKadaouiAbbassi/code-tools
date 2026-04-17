@@ -547,7 +547,6 @@ async function enableTelemetry(env: DetectedEnvironment, dryRun: boolean): Promi
   const lines = [
     "export CLAUDE_CODE_ENABLE_TELEMETRY=1",
     "export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
-    "export CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1",
   ];
 
   if (dryRun) {
