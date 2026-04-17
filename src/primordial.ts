@@ -4,6 +4,7 @@ import { symlink } from "node:fs/promises";
 import type { DetectedEnvironment, InstallResult } from "./types.js";
 import {
   copyFile,
+  copyDir,
   ensureDir,
   mergeJsonFile,
   appendToShellRc,
@@ -87,28 +88,59 @@ async function deployClaudeMd(env: DetectedEnvironment, dryRun: boolean): Promis
   }
 }
 
+const MANIFEST_NAME = ".code-tools-managed.json";
+
+type DeployManifest = { entries: string[] };
+
+async function readManifest(path: string): Promise<string[]> {
+  try {
+    const data = JSON.parse(await Bun.file(path).text()) as DeployManifest;
+    return Array.isArray(data.entries) ? data.entries : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeManifest(path: string, entries: string[]): Promise<void> {
+  await Bun.write(path, JSON.stringify({ entries: entries.sort() }, null, 2) + "\n");
+}
+
 async function deploySkills(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
   const component = "orchestration-skills";
   const src = join(getConfigsDir(), "..", "skills");
   const dst = join(env.claudeDir, "skills");
+  const manifestPath = join(dst, MANIFEST_NAME);
+
+  const skillDirs = await Array.fromAsync(new Bun.Glob("*/SKILL.md").scan({ cwd: src, onlyFiles: true }));
+  const current = [...new Set(skillDirs.map((rel) => rel.split("/")[0]))];
+  const previous = await readManifest(manifestPath);
+  const stale = previous.filter((name) => !current.includes(name));
 
   if (dryRun) {
-    log.info(`[dry-run] Would deploy orchestration skills from ${src} to ${dst}`);
-    return { component, status: "skipped", message: "[dry-run] Would deploy orchestration skills", verifyPassed: false };
+    log.info(`[dry-run] Would deploy ${current.length} skills from ${src} to ${dst}`);
+    if (stale.length > 0) log.info(`[dry-run] Would remove ${stale.length} stale skill(s): ${stale.join(", ")}`);
+    return { component, status: "skipped", message: `[dry-run] Would deploy ${current.length} skills, remove ${stale.length} stale`, verifyPassed: false };
   }
 
   try {
-    const skillDirs = await Array.fromAsync(new Bun.Glob("*/SKILL.md").scan({ cwd: src, onlyFiles: true }));
-    let count = 0;
-    for (const rel of skillDirs) {
-      const skillName = rel.split("/")[0];
-      const targetDir = join(dst, skillName);
-      await ensureDir(targetDir);
-      await copyFile(join(src, rel), join(targetDir, "SKILL.md"));
-      count++;
+    await ensureDir(dst);
+
+    for (const name of stale) {
+      await $`rm -rf ${join(dst, name)}`.quiet();
     }
-    log.success(`Deployed ${count} orchestration skill(s) to ${dst}`);
-    return { component, status: "installed", message: `${count} orchestration skills deployed`, verifyPassed: true };
+
+    for (const name of current) {
+      const skillSrc = join(src, name);
+      const skillDst = join(dst, name);
+      await $`rm -rf ${skillDst}`.quiet();
+      await copyDir(skillSrc, skillDst);
+    }
+
+    await writeManifest(manifestPath, current);
+
+    const removedMsg = stale.length > 0 ? `, removed ${stale.length} stale (${stale.join(", ")})` : "";
+    log.success(`Deployed ${current.length} skill(s) to ${dst}${removedMsg}`);
+    return { component, status: "installed", message: `${current.length} skills deployed${removedMsg}`, verifyPassed: true };
   } catch (err) {
     return {
       component,
@@ -123,20 +155,35 @@ async function deployCommands(env: DetectedEnvironment, dryRun: boolean): Promis
   const component = "user-commands";
   const src = join(getConfigsDir(), "..", "commands");
   const dst = join(env.claudeDir, "commands");
+  const manifestPath = join(dst, MANIFEST_NAME);
+
+  const files = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: src, onlyFiles: true }));
+  const current = [...files];
+  const previous = await readManifest(manifestPath);
+  const stale = previous.filter((name) => !current.includes(name));
 
   if (dryRun) {
-    log.info(`[dry-run] Would deploy slash commands from ${src} to ${dst}`);
-    return { component, status: "skipped", message: "[dry-run] Would deploy user commands", verifyPassed: false };
+    log.info(`[dry-run] Would deploy ${current.length} command(s) from ${src} to ${dst}`);
+    if (stale.length > 0) log.info(`[dry-run] Would remove ${stale.length} stale command(s): ${stale.join(", ")}`);
+    return { component, status: "skipped", message: `[dry-run] Would deploy ${current.length} commands, remove ${stale.length} stale`, verifyPassed: false };
   }
 
   try {
-    const files = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: src, onlyFiles: true }));
     await ensureDir(dst);
-    for (const f of files) {
-      await copyFile(join(src, f), join(dst, f));
+
+    for (const name of stale) {
+      await $`rm -f ${join(dst, name)}`.quiet();
     }
-    log.success(`Deployed ${files.length} slash command(s) to ${dst}`);
-    return { component, status: "installed", message: `${files.length} user commands deployed`, verifyPassed: true };
+
+    for (const name of current) {
+      await copyFile(join(src, name), join(dst, name));
+    }
+
+    await writeManifest(manifestPath, current);
+
+    const removedMsg = stale.length > 0 ? `, removed ${stale.length} stale (${stale.join(", ")})` : "";
+    log.success(`Deployed ${current.length} slash command(s) to ${dst}${removedMsg}`);
+    return { component, status: "installed", message: `${current.length} user commands deployed${removedMsg}`, verifyPassed: true };
   } catch (err) {
     return {
       component,
@@ -151,23 +198,35 @@ async function deployAgents(env: DetectedEnvironment, dryRun: boolean): Promise<
   const component = "user-agents";
   const src = join(getConfigsDir(), "..", "agents");
   const dst = join(env.claudeDir, "agents");
+  const manifestPath = join(dst, MANIFEST_NAME);
+
+  const files = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: src, onlyFiles: true }));
+  const current = files.filter((f) => f.toUpperCase() !== "AGENTS.md");
+  const previous = await readManifest(manifestPath);
+  const stale = previous.filter((name) => !current.includes(name));
 
   if (dryRun) {
-    log.info(`[dry-run] Would deploy subagents from ${src} to ${dst}`);
-    return { component, status: "skipped", message: "[dry-run] Would deploy user agents", verifyPassed: false };
+    log.info(`[dry-run] Would deploy ${current.length} agent(s) from ${src} to ${dst}`);
+    if (stale.length > 0) log.info(`[dry-run] Would remove ${stale.length} stale agent(s): ${stale.join(", ")}`);
+    return { component, status: "skipped", message: `[dry-run] Would deploy ${current.length} agents, remove ${stale.length} stale`, verifyPassed: false };
   }
 
   try {
-    const files = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: src, onlyFiles: true }));
     await ensureDir(dst);
-    let count = 0;
-    for (const f of files) {
-      if (f.toUpperCase() === "AGENTS.md") continue;
-      await copyFile(join(src, f), join(dst, f));
-      count++;
+
+    for (const name of stale) {
+      await $`rm -f ${join(dst, name)}`.quiet();
     }
-    log.success(`Deployed ${count} subagent(s) to ${dst}`);
-    return { component, status: "installed", message: `${count} user agents deployed`, verifyPassed: true };
+
+    for (const name of current) {
+      await copyFile(join(src, name), join(dst, name));
+    }
+
+    await writeManifest(manifestPath, current);
+
+    const removedMsg = stale.length > 0 ? `, removed ${stale.length} stale (${stale.join(", ")})` : "";
+    log.success(`Deployed ${current.length} subagent(s) to ${dst}${removedMsg}`);
+    return { component, status: "installed", message: `${current.length} user agents deployed${removedMsg}`, verifyPassed: true };
   } catch (err) {
     return {
       component,

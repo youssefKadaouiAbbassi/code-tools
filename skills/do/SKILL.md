@@ -9,12 +9,20 @@ Single entry point for coding work. Figures out what the user wants, applies the
 
 ## Principles (always applied)
 
-Load and apply `karpathy-guidelines`:
+Load both skills at Phase 0 of every coding task. They're complementary:
 
-1. **Think Before Coding** — surface assumptions and tradeoffs explicitly
-2. **Simplicity First** — minimal code, no speculative abstractions
-3. **Surgical Changes** — only touch what the task requires
-4. **Goal-Driven Execution** — define the verifiable success criterion up front
+- `Skill(skill: "karpathy-guidelines")` — **behavioral** principles (how to *approach* the work):
+  1. Think Before Coding — surface assumptions and tradeoffs explicitly
+  2. Simplicity First — minimal code, no speculative abstractions
+  3. Surgical Changes — only touch what the task requires
+  4. Goal-Driven Execution — define the verifiable success criterion up front
+
+- `Skill(skill: "coding-style")` — **style** rules (how the *code* should look):
+  1. No comments unless critical (WHY only; never WHAT, never history)
+  2. Clean + optimized (no dead code, no speculative abstractions, no stale imports)
+  3. Self-documenting names (full words, verbs for functions, nouns for data)
+  4. Smallest surface (one function one concern, rule-of-3 for extraction)
+  5. No dead defense (no try/catch for impossible cases, let errors bubble)
 
 ## Phase 1 — Classify the task (fast)
 
@@ -125,7 +133,8 @@ Your installed plugins expose these commands:
 - **just**, **mise**, **chezmoi**, **age**, **ghostty**, **tmux**, **n8n**, **obsidian**, **multica**
 
 ### Skills (auto-activate when description matches)
-- **karpathy-guidelines** — behavioral principles (always on)
+- **karpathy-guidelines** — behavioral principles (loaded at Phase 0)
+- **coding-style** — 5 style rules: no comments unless critical, clean + optimized, self-documenting names, smallest surface, no dead defense (loaded at Phase 0)
 - **Our custom — primary routes (Phase 1 classification):** `ship-feature`, `fix-bug`, `refactor-safely`, `security-audit`, `onboard-codebase`
 - **Our custom — team upgrade (Phase 1b):** `team-do` — native `TeamCreate` parallel workflow for multi-subsystem / debate / verify-heavy tasks. Never invoked directly by users; only via `/do` classifier upgrade.
 - **Our custom — complementary sub-skills (chained mid-workflow, not primary routes):**
