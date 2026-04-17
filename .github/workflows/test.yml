@@ -4,7 +4,6 @@ on:
   push:
     branches: [master]
   pull_request:
-    branches: [master]
 
 permissions:
   contents: read
@@ -13,80 +12,79 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  BUN_VERSION: "1.3.11"
-
 jobs:
-  typecheck:
-    name: Typecheck
-    runs-on: ubuntu-24.04
+  test:
+    name: Test (${{ matrix.os }} / bun ${{ matrix.bun }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        bun: ["1.2.x", "latest"]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          bun-version: ${{ matrix.bun }}
       - run: bun install --frozen-lockfile
       - run: bun tsc --noEmit
-
-  unit:
-    name: Unit + Integration Tests
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - run: bun install --frozen-lockfile
-      - run: bun test tests/unit
-      - run: bun test tests/integration
+      - run: bun test tests/unit tests/integration tests/scenarios
 
   lint-hooks:
-    name: Shellcheck Hooks
-    runs-on: ubuntu-24.04
+    name: Shellcheck
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get install -y shellcheck
-      - run: shellcheck configs/hooks/*.sh configs/project-claude/hooks/*.sh
-      - run: shellcheck bootstrap.sh
-
-  e2e-ubuntu:
-    name: E2E (Ubuntu Docker)
-    runs-on: ubuntu-24.04
-    needs: [unit]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@v5
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - run: bun install --frozen-lockfile
-      - run: bun test tests/e2e
-    timeout-minutes: 15
+          persist-credentials: false
+      - run: sudo apt-get install -y shellcheck
+      - run: shellcheck configs/hooks/*.sh configs/project-claude/hooks/*.sh bootstrap.sh
+
+  actionlint:
+    name: Actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Run actionlint
+        run: |
+          bash <(curl -fsSL --connect-timeout 15 --max-time 60 \
+            https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
 
   bats-ubuntu:
-    name: BATS Post-Install Verification (Ubuntu)
-    runs-on: ubuntu-24.04
-    needs: [unit]
+    name: Post-install (Ubuntu)
+    runs-on: ubuntu-latest
+    needs: [test]
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          bun-version: "1.2.x"
       - run: sudo apt-get install -y bats jq
       - run: bun install --frozen-lockfile
-      - run: bun run bin/setup.ts --non-interactive --tier primordial
+      - run: bun run bin/setup.ts setup --non-interactive --tier primordial
       - run: bats tests/ci/verify.bats
 
   bats-macos:
-    name: BATS Post-Install Verification (macOS)
-    runs-on: macos-14
-    if: github.ref == 'refs/heads/master'
-    needs: [unit]
+    name: Post-install (macOS)
+    runs-on: macos-latest
+    needs: [test]
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          bun-version: "1.2.x"
       - run: brew install bats-core jq
       - run: bun install --frozen-lockfile
-      - run: bun run bin/setup.ts --non-interactive --tier primordial
+      - run: bun run bin/setup.ts setup --non-interactive --tier primordial
       - run: bats tests/ci/verify.bats

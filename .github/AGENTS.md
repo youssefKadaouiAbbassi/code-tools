@@ -1,87 +1,116 @@
-<!-- Generated: 2026-04-14 | Updated: 2026-04-14 -->
+<!-- Generated: 2026-04-17 | Parent: ../AGENTS.md -->
 
 # .github/
 
 ## Purpose
 
-CI/CD workflows and GitHub automation for the `yka-code` installer. This directory holds every pipeline that runs on `push` and `pull_request` against `master` — unit, integration, e2e, hook linting, and post-install BATS verification across Ubuntu and macOS runners.
-
-Parent: [`../AGENTS.md`](../AGENTS.md).
+Two GitHub Actions workflows for the `@youssefKadaouiAbbassi/yka-code-setup` npm package: a verification pipeline on every push/PR and a tag-triggered npm publish via OIDC trusted publishing. Pattern sourced from the same conventions used by Biome, Vite, Prettier, zx, ni, and Commander (April 2026 survey).
 
 ## Key Files
 
-| File | Description |
-|------|-------------|
-| `workflows/test.yml` | Single test pipeline with 6 jobs — `typecheck`, `unit`, `lint-hooks`, `e2e-ubuntu`, `bats-ubuntu`, `bats-macos`. Triggers on push/PR to `master`. Pins `ubuntu-24.04` and `BUN_VERSION` env var; declares `permissions: contents: read` and concurrency cancel. |
+| File | Trigger | What it does |
+|------|---------|-------------|
+| `workflows/test.yml` | `push` to `master`, every `pull_request` | Matrix test (ubuntu + macos × bun 1.2.x + latest), shellcheck, actionlint, real-install bats on Ubuntu + macOS runners |
+| `workflows/publish.yml` | `push` tag `v*`, `workflow_dispatch` | Verify tag ↔ package.json, test, pack dry-run, npm publish with `--provenance` (OIDC), GitHub release |
 
-## Subdirectories
+## `test.yml` jobs
 
-| Directory | Purpose |
-|-----------|---------|
-| `workflows/` | GitHub Actions workflow definitions. Each `.yml` file here becomes a distinct workflow in the GitHub Actions UI. |
+| Job | Runner | Needs | Notes |
+|-----|--------|-------|-------|
+| `test` (matrix) | ubuntu-latest + macos-latest × bun 1.2.x + latest | — | `fail-fast: false`; runs typecheck + unit + integration + scenarios |
+| `lint-hooks` | ubuntu-latest | — | shellcheck on `configs/hooks/*.sh`, `configs/project-claude/hooks/*.sh`, `bootstrap.sh` |
+| `actionlint` | ubuntu-latest | — | Lints workflow YAML itself — catches shell errors inside `run:` blocks |
+| `bats-ubuntu` | ubuntu-latest | `test` | Runs the real installer with `--tier primordial`, then `bats tests/ci/verify.bats` |
+| `bats-macos` | macos-latest | `test` | Same, on Apple Silicon |
 
-## Workflow Jobs (`workflows/test.yml`)
+## `publish.yml` jobs
 
-| Job | Runner | Depends on | What it does |
-|-----|--------|------------|--------------|
-| `typecheck` | `ubuntu-24.04` | — | `bun install --frozen-lockfile` then `bun tsc --noEmit`. |
-| `unit` | `ubuntu-24.04` | — | `bun install --frozen-lockfile` then `bun test tests/unit` and `bun test tests/integration`. |
-| `lint-hooks` | `ubuntu-24.04` | — | Installs `shellcheck` via apt and runs it against `configs/hooks/*.sh`, `configs/project-claude/hooks/*.sh`, and `bootstrap.sh`. |
-| `e2e-ubuntu` | `ubuntu-24.04` | `unit` | `bun test tests/e2e` with a 15-minute timeout (testcontainers). |
-| `bats-ubuntu` | `ubuntu-24.04` | `unit` | Runs the installer with `--non-interactive --tier primordial`, then executes `bats tests/ci/verify.bats`. |
-| `bats-macos` | `macos-14` | `unit` | Same as `bats-ubuntu` but on macOS. Gated to `master` pushes only (`if: github.ref == 'refs/heads/master'`) to conserve macOS minutes. |
+| Job | Runner | Needs | Permissions | Notes |
+|-----|--------|-------|-------------|-------|
+| `verify` | ubuntu-latest | — | `contents: read` | Resolves tag ref (push OR `workflow_dispatch` input), hard-fails if `package.json.version` ≠ tag, runs typecheck + tests + `bun pm pack --dry-run` |
+| `publish-npm` | ubuntu-latest | `verify` | `contents: read`, `id-token: write` | `environment: release` (manual-approval gate). `npm publish --access public --provenance` via OIDC trusted publishing — no `NPM_TOKEN` secret |
+| `github-release` | ubuntu-latest | `verify`, `publish-npm` | `contents: write` | `softprops/action-gh-release@v2` with auto-generated notes; `prerelease: true` when tag contains `-` (e.g. `v0.2.0-rc.1`) |
 
-## For AI Agents
+## One-time setup (manual, by the maintainer)
 
-### Working With Workflows
+1. **Register the npm trusted publisher** on npmjs.com → package Settings → Trusted Publishers → Add:
+   - Organization/user: `youssefKadaouiAbbassi`
+   - Repository: `yka-code`
+   - Workflow filename: `publish.yml`
+   - Environment name: `release`
+2. **Create the `release` environment** on GitHub → repo Settings → Environments → New environment → `release`. Optionally add required reviewers (self-approval still works with a single reviewer).
+3. **Ensure `npm >= 11.5.1`** on the runner — the `npm install -g npm@latest` step in `publish-npm` handles this.
 
-- **Keep the single-file convention.** All jobs live in `workflows/test.yml`. Do not split into multiple workflow files without a concrete reason (matrix complexity, unrelated schedules, etc.) — one file is easier to reason about.
-- **Pin actions by major version.** Current pins: `actions/checkout@v4`, `oven-sh/setup-bun@v2`. When adding new actions, pin to `@vN` (not `@latest`, not a floating `main`).
-- **Bun version is pinned via `BUN_VERSION` env var** (currently `1.3.11`). Update the env var in one place when bumping; all jobs consume it. `bootstrap.sh` installs `bun-install-latest` for end-users — CI uses a pinned version for reproducibility.
-- **Respect job dependencies.** `e2e` and `bats` jobs `needs: [unit]` so fast unit failures short-circuit the slower lanes. Preserve this ordering when adding jobs.
-- **macOS runs are gated to `master`.** `bats-macos` uses `if: github.ref == 'refs/heads/master'` — PRs do not consume macOS minutes. Do not remove this guard without approval.
-- **Install system tools inside the job.** `shellcheck`, `bats`, and `jq` are installed step-by-step (`apt-get`/`brew`) rather than via third-party setup actions — keeps the supply chain small.
+No `NPM_TOKEN` secret. No classic automation tokens.
 
-### Adding a New Job
+## Release cadence
 
-1. Add the job under `jobs:` in `workflows/test.yml`.
-2. Start with `actions/checkout@v4` and `oven-sh/setup-bun@v2`.
-3. Declare `needs: [unit]` if the job is slow or depends on build artefacts.
-4. Add a `timeout-minutes` cap for any job that exercises containers or network installs (see `e2e-ubuntu` = 15).
-5. Update the job table above.
+```bash
+# 1. Bump version in package.json (manual)
+# 2. Commit + tag + push
+git commit -am "chore: release v0.2.0"
+git tag v0.2.0
+git push origin master --tags
+# 3. CI runs publish.yml → verify → publish-npm (awaits approval if reviewer gate on) → github-release
+```
 
-### Hard Rules
+Rescue a botched publish without re-tagging:
 
-1. **No secrets in workflows yet.** The repo has no publish pipeline in `.github/` today. When one is added (`publish.yml` for npm), use `secrets.NPM_TOKEN` from repo settings — never commit tokens.
-2. **Never skip hooks.** Do not add `--no-verify` to any `git` step inside a workflow.
-3. **Do not run `bun test` without narrowing.** The installer's default `bun test` includes e2e tests that need containers; CI invokes suites explicitly (`tests/unit`, `tests/integration`, `tests/e2e`) to keep lanes independent.
-4. **Verify shellcheck-clean on every hook change.** The `lint-hooks` job is the gate for `configs/hooks/*.sh` — do not silence warnings with `# shellcheck disable=` without a justifying comment.
-5. **Keep BATS verification authoritative.** `tests/ci/verify.bats` is the post-install contract. New primordial components must add a BATS assertion before merge.
+```bash
+# Delete the failed npm publication if needed: npm unpublish @youssefKadaouiAbbassi/yka-code-setup@0.2.0
+# Then re-trigger the workflow against the same tag:
+gh workflow run publish.yml -f tag=v0.2.0
+```
 
-### Writer vs Reviewer
+## Conventions
 
-Per Principle 7 in the root `AGENTS.md`: author workflow changes in this lane, then hand the green-CI verdict to `code-reviewer` or `verifier` in a separate pass. Do not self-approve a workflow change in the same context that wrote it.
+### Action pinning
+
+All actions pinned to major version tags (`@v5`, `@v2`, `@v4`). Dependabot auto-updates these. SHA-pinning is explicitly out of scope for a pre-1.0 CLI — readability matters more than the marginal supply-chain benefit at this size.
+
+### Runner images
+
+`ubuntu-latest` and `macos-latest` (not pinned to `-24.04` / `-14`). Industry standard per the repo survey. Accept the small drift risk; failing jobs tell us immediately.
+
+### Checkout hardening
+
+Every `actions/checkout@v5` in this dir uses `persist-credentials: false` — stops the `GITHUB_TOKEN` from landing in `.git/config` where `npm publish` error output could leak it. Universal pattern across the sampled publish workflows (zx, prettier, ni, vite).
+
+### Cache discipline in publish
+
+The `publish-npm` job does **not** use `oven-sh/setup-bun`'s cache mechanism. Cache poisoning would allow an attacker with write access to a PR to seed the dep cache with a compromised lockfile resolution, which would then be restored by the publish job. Vite does the same (`publish.yml:27 package-manager-cache: false` with a zizmor cite). The test lanes cache freely — different risk profile.
+
+### `id-token: write` placement
+
+Job-level, not workflow-level. Workflow-level `id-token` is silently ignored by npm's OIDC verifier.
+
+### Platform support
+
+`package.json.os: ["darwin", "linux"]` — npm refuses install on Windows. The installer uses unix-shell heavily; pretending Windows works would be worse than explicitly blocking it. Revisit when we have a pure-Bun install path (no `sh -c`).
+
+## Hard rules
+
+1. **Never add an `NPM_TOKEN` secret.** OIDC trusted publishing is the only supported publish path here. If you see yourself writing `${{ secrets.NPM_TOKEN }}`, stop and go fix the trusted-publisher config on npmjs.com instead.
+2. **Never remove `persist-credentials: false` in publish.yml** — it's the leak prevention for `GITHUB_TOKEN`.
+3. **Never widen `publish-npm` permissions beyond `id-token: write` + `contents: read`** — it's the least-privilege ceiling for trusted publishing.
+4. **Never skip the tag ↔ `package.json` gate** — forgetting it lets you tag `v1.2.3` while publishing `1.2.2`.
+5. **Never publish from any runner except `ubuntu-latest`.** Matrix is for test only; publish is single-OS.
+6. **Never skip hooks** (`--no-verify`) in any `git` step inside a workflow.
 
 ## Dependencies
 
-### GitHub Actions
-
 | Action | Version | Role |
 |--------|---------|------|
-| `actions/checkout` | `v4` | Clone the repo into the runner. |
-| `oven-sh/setup-bun` | `v2` | Install Bun (`bun-version: latest`). |
+| `actions/checkout` | `@v5` | Clone the repo into the runner (`persist-credentials: false`) |
+| `actions/setup-node` | `@v4` | Node runtime for `npm publish` in the publish job |
+| `oven-sh/setup-bun` | `@v2` | Bun runtime for install + test + pack |
+| `softprops/action-gh-release` | `@v2` | GitHub release creation with auto-generated notes |
 
-### Runner Tooling (installed in-job)
-
-| Tool | Source | Used by |
-|------|--------|---------|
+| Tool | Installed via | Used by |
+|------|---------------|---------|
 | `shellcheck` | `apt-get` | `lint-hooks` |
-| `bats` | `apt-get` (Ubuntu) / `brew` (macOS) | `bats-ubuntu`, `bats-macos` |
-| `jq` | `apt-get` / `brew` | `bats-ubuntu`, `bats-macos` (required by installed hook scripts) |
-
-### Runner Images
-
-- `ubuntu-latest` — default for unit, lint, e2e, and Linux BATS.
-- `macos-14` — Apple Silicon runner for macOS BATS verification.
+| `bats-core` | `apt-get` (Ubuntu) / `brew` (macOS) | `bats-ubuntu`, `bats-macos` |
+| `jq` | `apt-get` / `brew` | `bats-ubuntu`, `bats-macos`, `verify` (version gate) |
+| `actionlint` | `curl | bash` | `actionlint` job |
 
 <!-- MANUAL: -->
