@@ -1,5 +1,28 @@
 {
   "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "Task",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(bun test:*)",
+      "Bash(bun run:*)",
+      "Bash(bunx:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(npx:*)",
+      "Bash(pytest:*)",
+      "Bash(cargo test:*)",
+      "Bash(go test:*)",
+      "Bash(just:*)"
+    ],
     "deny": [
       "Bash(rm -rf *)",
       "Bash(git push --force*)",
