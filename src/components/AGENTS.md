@@ -21,7 +21,6 @@ Every category installer is expected to be **idempotent**, register MCP servers 
 | `security.ts` | recommended | Snyk MCP (5), container-use (15) | `npm i -g snyk@latest` + `snyk mcp configure --tool=claude-cli`; brew/curl install Dagger's `container-use` |
 | `github.ts` | recommended | gh (16), github-mcp (17), claude-code-action (18), claude-code-review (19) | brew/apt/pacman/dnf `gh`; registers `github` HTTP MCP (needs `GITHUB_PAT`); others are guidance-only (GH Actions / native CC feature gated on `claude >= 2.1.104`) |
 | `workstation.ts` | recommended | Ghostty (36), tmux (37), chezmoi (39), age (41) | brew/pacman/curl Ghostty; **verifies tmux only** (installed by core); brew/curl chezmoi; brew/binary-download `age` |
-| `orchestration.ts` | optional | Agent Teams (25), Multica (26) | Verifies `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` env var (core); runs multica upstream install.sh `--with-server` (CLI + docker-compose stack) |
 | `workflow.ts` | optional | Composio (35) | Auto-bootstraps Composio MCP server via HTTP POST to backend.composio.dev (needs `COMPOSIO_API_KEY`), then registers HTTP MCP |
 
 ## Module Contract
@@ -108,7 +107,6 @@ Tools and services invoked by these modules (not runtime deps of the installer i
 | Ghostty, chezmoi, `age` | workstation | brew / pacman / curl / apt / dnf |
 | `claude-ntfy-hook` | notifications | npm global |
 | `ccflare` | observability | npm global |
-| Multica | orchestration | npm global |
 | `awesome-design-md` | design | `npx degit VoltAgent/awesome-design-md` |
 | Obsidian, `claude-obsidian` | knowledge | brew cask, npm global |
 | `n8n`, Composio MCP | workflow | npm global; HTTPS MCP at `backend.composio.dev/v3/mcp/<SERVER_ID>?user_id=<UID>` with `x-api-key` header. Auto-bootstraps server via `POST /api/v3/mcp/servers` if `COMPOSIO_MCP_SERVER_ID` unset. |

@@ -153,7 +153,7 @@ Your installed plugins expose these commands:
 - **ast-grep** — structural/AST code search (use for patterns that grep can't express)
 - **gh** — GitHub operations (prefer over github MCP when possible; zero token overhead)
 - **container-use** — sandboxed per-agent execution (Docker-level isolation)
-- **just**, **mise**, **chezmoi**, **age**, **ghostty**, **tmux**, **n8n**, **obsidian**, **multica**
+- **just**, **mise**, **chezmoi**, **age**, **ghostty**, **tmux**
 
 ### Skills (auto-activate when description matches)
 - **karpathy-guidelines** — behavioral principles (loaded at Phase 0)

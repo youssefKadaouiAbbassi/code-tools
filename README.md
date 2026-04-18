@@ -241,24 +241,15 @@ Headless Approval Loop:
 | # | Tool | Links | What it does |
 |:--:|------|:-----:|-------------|
 | 25 | **Agent Teams** | [docs](https://code.claude.com/docs/en/agent-teams) | Native experimental. ≤5 parallel agents on shared task list. Direct peer messaging. File-locked task claims. Enable: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. |
-| 26 | **Multica** | [GitHub](https://github.com/multica-ai/multica) / [website](https://multica.ai) | Agent issue board. Agents get profiles, post comments, report blockers. **Skills compound over time** — every solution becomes a reusable skill ([verified from source code](https://github.com/multica-ai/multica/blob/main/server/migrations/008_structured_skills.up.sql): DB schema + Go backend + CLI + UI + WebSocket + skills-lock.json). 10.2K stars, 28 releases, 4 runtimes. |
 
 ```
 Parallel Execution:
 
-  You create issues in Multica (#26)
-        |
   Agent Teams (#25) spawns parallel agents
         |
-  Each agent gets its own git worktree (#38)
+  Each agent gets its own git worktree
         |
   Each worktree runs in container-use (#15)
-        |
-  Agents post updates to Multica
-        |
-  Completed solutions become reusable skills
-        |
-  Skills library compounds over time
 ```
 
 ### Autonomy
@@ -339,8 +330,8 @@ Design Pipeline:
 Day 1:   Claude starts with CLAUDE.md rules only
 Day 7:   claude-mem has a week of captured decisions
 Day 14:  lessons.md has 20 corrections Claude never repeats
-Day 30:  Multica has 15 reusable skills from completed agent tasks
-Day 60:  Obsidian wiki has structured knowledge from raw docs
+Day 30:  skills directory has grown with reusable workflows
+Day 60:  knowledge-base/ has structured notes from raw docs
 
 Day 1 Claude vs Day 60 Claude = dramatically different quality
 ```
@@ -378,10 +369,10 @@ YOU at Ghostty + tmux (3-5 panes)
   |   |-- CLI tools ready (ast-grep, Playwright, Crawl4AI, gh)
   |   +-- Native: Fast Mode, Advisor, Computer Use, defer, Monitor
   |
-  +-- Pane 2-4: Parallel agents (Agent Teams or Multica)
+  +-- Pane 2-4: Parallel agents (Agent Teams)
   |   |-- Each in its own git worktree
   |   |-- Each in its own container
-  |   +-- Completed work -> skills compound in Multica
+  |   +-- Completed work -> skills compound in the repo
   |
   +-- Phone: ntfy Allow/Deny + Telegram Channels
   |   |-- defer pauses -> notification -> you approve
@@ -396,8 +387,7 @@ YOU at Ghostty + tmux (3-5 panes)
   +-- Background: compounding
       |-- claude-mem captures every session
       |-- lessons.md accumulates corrections
-      |-- Multica skills library grows
-      |-- Obsidian wiki compounds from raw docs
+      |-- knowledge-base/ compounds from raw docs
       +-- Monthly metabolic audit sheds dead weight
 ```
 
@@ -493,7 +483,6 @@ This system was built through 12 iterations with:
 - **deep-research ultradeep audit** (8-phase structured pipeline)
 - **4 primary-source verifiers** (actual GitHub READMEs, not blog posts)
 - **4 functionality verifiers** (real user experiences from HN, Reddit, reviews)
-- **Multica skills system** verified from [actual source code](https://github.com/multica-ai/multica/blob/main/server/migrations/008_structured_skills.up.sql)
 - **claude-mem overhead** verified as startup-only ([GitHub issue #923](https://github.com/thedotmack/claude-mem/issues/923))
 
 Full research at [`.omc/research/`](.omc/research/) — 120+ files, 30K+ lines of research data.

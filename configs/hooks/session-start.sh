@@ -63,8 +63,6 @@ banner_body() {
     printf '%sProject skills:%s %sseeding via autoskills…%s\n' "$DIM" "$RESET" "$YELLOW" "$RESET"
   fi
 
-  mul_front="http://localhost:${MULTICA_FRONTEND_PORT:-3333}"
-  mul_back="http://localhost:${MULTICA_BACKEND_PORT:-8080}"
   mem_url="http://localhost:37777"
 
   printf '\n%sLocal tools%s %s(click to open)%s\n' "$BOLD" "$RESET" "$DIM" "$RESET"
@@ -73,8 +71,6 @@ banner_body() {
     link "$2" "$2"
     printf '%s\n' "$RESET"
   }
-  render "multica (frontend)"    "$mul_front"
-  render "multica (backend API)" "$mul_back"
   render "claude-mem (observer)" "$mem_url"
 }
 

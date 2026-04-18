@@ -45,7 +45,7 @@ Three install tiers gate every component:
 |------|--------|---------|------------------|
 | **Core** | none (silent) | always installs | `settings.json`, `CLAUDE.md` + symlinks, 6 hook scripts, `tmux.conf`, `starship.toml`, `statusline.sh`, `mise`, `just`, git aliases, telemetry env vars, `tasks/lessons.md` |
 | **Recommended** | yes/no | **yes** | Code Intelligence (Serena + ast-grep), Browser+Web (Playwright + Crawl4AI + Docfork + DeepWiki), Memory+Context (claude-mem + context-mode + claude-hud), cc-plugins (Anthropic official marketplace), skills-registry (skills.sh seed bundle), Security (Snyk + container-use), GitHub stack, Workstation extras |
-| **Optional** | yes/no | **no** | Observability (ccflare), Orchestration (Multica), Design (Stitch + awesome-design-md), Knowledge (Obsidian + claude-obsidian), Workflow (n8n + Composio) |
+| **Optional** | yes/no | **no** | Workflow (Composio), TrailOfBits |
 
 Core files are **backed up then overridden** at `~/.claude-backup/{timestamp}/`. Component installs must be **idempotent** (check before acting), MCP entries must be **deep-merged** into existing JSON, and shell rc edits use the `# yka-code-managed` marker to prevent duplication.
 

@@ -330,12 +330,6 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
         action: "Add `uses: anthropics/claude-code-action@v1` to a workflow in .github/workflows/ of any repo you want reviewed",
       });
     }
-    if (r.component === "Multica" && r.status === "installed") {
-      manualSteps.push({
-        name: "Multica",
-        action: "Run `multica setup` to authenticate and start the agent daemon",
-      });
-    }
   }
 
   if (manualSteps.length > 0) {
