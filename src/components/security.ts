@@ -70,13 +70,29 @@ const snykSpec: ComponentSpec = {
         };
       }
       await $`sh -c "npm install -g snyk@latest"`;
-      await $`sh -c "snyk mcp configure --tool=claude-cli"`.nothrow();
+      const configure = await $`sh -c "snyk mcp configure --tool=claude-cli"`.nothrow();
       const installed = commandExists("snyk");
+      if (!installed) {
+        return {
+          component: "Snyk MCP",
+          status: "failed",
+          message: "Snyk MCP setup ran but binary not found",
+          verifyPassed: false,
+        };
+      }
+      if (configure.exitCode !== 0) {
+        return {
+          component: "Snyk MCP",
+          status: "failed",
+          message: `snyk mcp configure exited ${configure.exitCode} — run \`snyk mcp configure --tool=claude-cli\` manually: ${configure.stderr.toString().slice(0, 200)}`,
+          verifyPassed: false,
+        };
+      }
       return {
         component: "Snyk MCP",
-        status: installed ? "installed" : "failed",
-        message: installed ? (existed ? "Snyk upgraded + MCP reconfigured" : "Snyk MCP configured successfully") : "Snyk MCP setup ran but binary not found",
-        verifyPassed: installed,
+        status: "installed",
+        message: existed ? "Snyk upgraded + MCP reconfigured" : "Snyk MCP configured successfully",
+        verifyPassed: true,
       };
     } catch (err) {
       return {
