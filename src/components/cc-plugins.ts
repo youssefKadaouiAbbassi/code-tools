@@ -1,81 +1,31 @@
 import { $ } from "bun";
-import { promises as fs } from "node:fs";
-import { join } from "node:path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, log } from "../utils.js";
 import { CORE_PLUGINS } from "../packages.js";
 import type { ComponentSpec } from "./framework.js";
 import { runComponent } from "./framework.js";
+import { ensureMarketplace, installPlugin, listInstalledPlugins } from "../registry/plugins.js";
 
 const MARKETPLACE_SLUG = "anthropics/claude-plugins-official";
 const MARKETPLACE_NAME = "claude-plugins-official";
-
-const EXTRA_MARKETPLACES: Array<{ slug: string; marketplaceName: string; plugins: string[] }> = [
-  { slug: "obra/superpowers-marketplace", marketplaceName: "superpowers-marketplace", plugins: [] },
-];
-
-const LSP_PLUGINS: string[] = [];
-
-const ALL_PLUGINS = [...CORE_PLUGINS, ...LSP_PLUGINS];
-const EXTRA_PLUGIN_NAMES = EXTRA_MARKETPLACES.flatMap((m) => m.plugins);
-const TOTAL_PLUGIN_COUNT = ALL_PLUGINS.length + EXTRA_PLUGIN_NAMES.length;
 
 export const ccPluginsCategory: ComponentCategory = {
   id: "cc-plugins",
   name: "Claude Code Plugins",
   tier: "recommended",
-  description: `${TOTAL_PLUGIN_COUNT} curated Anthropic-official plugins (feature-dev, code-review, pr-review-toolkit, session-report, plugin-dev, etc.) + stack-matched LSP binaries`,
+  description: `${CORE_PLUGINS.length} curated Anthropic-official plugins (feature-dev, code-review, pr-review-toolkit, session-report, plugin-dev, etc.) + stack-matched LSP binaries`,
   defaultEnabled: true,
-  components: [
-    ...ALL_PLUGINS.map((name, i) => ({
-      id: 200 + i,
-      name,
-      displayName: name,
-      description: `Anthropic-maintained plugin: ${name}`,
-      tier: "recommended" as const,
-      category: "cc-plugins",
-      packages: [],
-      verifyCommand: "claude plugin list",
-    })),
-    ...EXTRA_PLUGIN_NAMES.map((name, i) => ({
-      id: 200 + ALL_PLUGINS.length + i,
-      name,
-      displayName: name,
-      description: `Community plugin (${EXTRA_MARKETPLACES.find((m) => m.plugins.includes(name))?.slug}): ${name}`,
-      tier: "recommended" as const,
-      category: "cc-plugins",
-      packages: [],
-      verifyCommand: "claude plugin list",
-    })),
-  ],
+  components: CORE_PLUGINS.map((name, i) => ({
+    id: 200 + i,
+    name,
+    displayName: name,
+    description: `Anthropic-maintained plugin: ${name}`,
+    tier: "recommended" as const,
+    category: "cc-plugins",
+    packages: [],
+    verifyCommand: "claude plugin list",
+  })),
 };
-
-async function loadInstalledPlugins(env: DetectedEnvironment): Promise<Set<string>> {
-  const path = join(env.claudeDir, "plugins", "installed_plugins.json");
-  try {
-    const data = JSON.parse(await fs.readFile(path, "utf-8")) as { plugins?: Record<string, unknown> };
-    return new Set(Object.keys(data.plugins ?? {}));
-  } catch {
-    return new Set();
-  }
-}
-
-async function marketplaceRegistered(env: DetectedEnvironment, name: string): Promise<boolean> {
-  const path = join(env.claudeDir, "plugins", "known_marketplaces.json");
-  try {
-    const text = await fs.readFile(path, "utf-8");
-    return text.includes(name);
-  } catch {
-    return false;
-  }
-}
-
-async function ensureMarketplace(env: DetectedEnvironment, slug: string, name: string): Promise<{ ok: boolean; exitCode?: number }> {
-  if (await marketplaceRegistered(env, name)) return { ok: true };
-  log.info(`Adding marketplace: ${slug}`);
-  const mkt = await $`claude plugin marketplace add ${slug}`.nothrow();
-  return { ok: mkt.exitCode === 0, exitCode: mkt.exitCode };
-}
 
 async function installLspBinary(t: { name: string; needs: () => boolean; install: string; verify: string }, dryRun: boolean): Promise<InstallResult> {
   if (!t.needs()) {
@@ -141,20 +91,18 @@ const LSP_TARGETS: Array<{ name: string; needs: () => boolean; install: string; 
 ];
 
 function pluginSpec(id: number, name: string, slug: string, marketplaceName: string): ComponentSpec {
+  const key = `${name}@${marketplaceName}`;
   return {
     id,
     name,
     displayName: name,
-    description: `Claude Code plugin: ${name}@${marketplaceName}`,
+    description: `Claude Code plugin: ${key}`,
     tier: "recommended",
     category: "cc-plugins",
-    probe: async (env) => {
-      const installed = await loadInstalledPlugins(env);
-      return { present: installed.has(`${name}@${marketplaceName}`) };
-    },
+    probe: async (env) => ({ present: (await listInstalledPlugins(env)).has(key) }),
     plan: () => ({ kind: "install", steps: [] }),
     install: async (env, _plan, dryRun) => {
-      if (!commandExists("claude")) {
+      if (!commandExists("claude") && !dryRun) {
         return {
           component: name,
           status: "skipped",
@@ -166,7 +114,7 @@ function pluginSpec(id: number, name: string, slug: string, marketplaceName: str
         return {
           component: name,
           status: "skipped",
-          message: `[dry-run] Would install ${name}@${marketplaceName}`,
+          message: `[dry-run] Would install ${key}`,
           verifyPassed: false,
         };
       }
@@ -179,9 +127,7 @@ function pluginSpec(id: number, name: string, slug: string, marketplaceName: str
           verifyPassed: false,
         };
       }
-      const installed = await loadInstalledPlugins(env);
-      const key = `${name}@${marketplaceName}`;
-      if (installed.has(key)) {
+      if ((await listInstalledPlugins(env)).has(key)) {
         return {
           component: name,
           status: "already-installed",
@@ -189,33 +135,21 @@ function pluginSpec(id: number, name: string, slug: string, marketplaceName: str
           verifyPassed: true,
         };
       }
-      log.info(`Installing ${key}`);
-      const out = await $`claude plugin install ${key}`.nothrow();
-      return {
-        component: name,
-        status: out.exitCode === 0 ? "installed" : "failed",
-        message: out.exitCode === 0
-          ? (slug === MARKETPLACE_SLUG ? `${name} installed` : `${name} installed (from ${slug})`)
-          : `claude plugin install ${key} exited ${out.exitCode}`,
-        verifyPassed: out.exitCode === 0,
-      };
+      return installPlugin(name, marketplaceName, false);
     },
-    verify: async () => true,
+    verify: async (env) => (await listInstalledPlugins(env)).has(key),
   };
 }
 
-export const ccPluginsSpecs: ComponentSpec[] = [
-  ...ALL_PLUGINS.map((n, i) => pluginSpec(200 + i, n, MARKETPLACE_SLUG, MARKETPLACE_NAME)),
-  ...EXTRA_MARKETPLACES.flatMap((m, mi) =>
-    m.plugins.map((n, i) => pluginSpec(200 + ALL_PLUGINS.length + mi * 100 + i, n, m.slug, m.marketplaceName)),
-  ),
-];
+export const ccPluginsSpecs: ComponentSpec[] = CORE_PLUGINS.map(
+  (n, i) => pluginSpec(200 + i, n, MARKETPLACE_SLUG, MARKETPLACE_NAME),
+);
 
 export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
   const results: InstallResult[] = [];
 
   if (!commandExists("claude")) {
-    for (const name of ALL_PLUGINS) {
+    for (const name of CORE_PLUGINS) {
       results.push({
         component: name,
         status: "skipped",
@@ -227,8 +161,8 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
   }
 
   if (dryRun) {
-    log.info(`[dry-run] Would add ${MARKETPLACE_SLUG} marketplace and install ${ALL_PLUGINS.length} plugins`);
-    for (const name of ALL_PLUGINS) {
+    log.info(`[dry-run] Would add ${MARKETPLACE_SLUG} marketplace and install ${CORE_PLUGINS.length} plugins`);
+    for (const name of CORE_PLUGINS) {
       results.push({
         component: name,
         status: "skipped",
