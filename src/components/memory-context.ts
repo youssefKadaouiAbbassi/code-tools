@@ -2,7 +2,8 @@ import { $ } from "bun";
 import { promises as fs } from "fs";
 import { join } from "path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
-import { commandExists, fileExists, mergeJsonFile, registerMcp, log } from "../utils.js";
+import { commandExists, fileExists, mergeJsonFile, log } from "../utils.js";
+import { registerMcp } from "../registry/mcp.js";
 import type { ComponentSpec } from "./framework.js";
 import { runComponent } from "./framework.js";
 

@@ -1,5 +1,6 @@
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
-import { registerMcp, log, commandExists } from "../utils.js";
+import { log, commandExists } from "../utils.js";
+import { registerMcp } from "../registry/mcp.js";
 import { installBinary } from "../packages.js";
 import type { ComponentSpec } from "./framework.js";
 import { runComponent } from "./framework.js";

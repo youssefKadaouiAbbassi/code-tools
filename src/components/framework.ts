@@ -6,8 +6,9 @@ import type {
   McpSpec,
   Tier,
 } from "../types.js";
-import { appendToShellRc, registerMcp, log, commandExists } from "../utils.js";
+import { appendToShellRc, log, commandExists } from "../utils.js";
 import { installBinary } from "../packages.js";
+import { registerMcp } from "../registry/mcp.js";
 
 export type ProbeState = {
   present: boolean;

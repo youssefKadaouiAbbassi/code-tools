@@ -2,7 +2,8 @@ import { $ } from "bun";
 import { promises as fs } from "node:fs";
 import { dirname } from "node:path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
-import { registerMcp, log } from "../utils.js";
+import { log } from "../utils.js";
+import { registerMcp } from "../registry/mcp.js";
 import type { ComponentSpec } from "./framework.js";
 import { runComponent } from "./framework.js";
 
