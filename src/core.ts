@@ -261,7 +261,7 @@ async function deployHooks(env: DetectedEnvironment, dryRun: boolean, deployMode
   const component = "claude-hooks";
   const hooksSourceDir = isLocalScope(env)
     ? join(getConfigsDir(), "project-claude", "hooks")
-    : join(getConfigsDir(), "hooks");
+    : join(getConfigsDir(), "home-claude", "hooks");
   const hooksTargetDir = join(env.claudeDir, "hooks");
   const manifestPath = join(hooksTargetDir, MANIFEST_NAME);
 
