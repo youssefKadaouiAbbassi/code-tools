@@ -21,14 +21,8 @@ import {
   renderRestartHints,
   renderManualSteps,
 } from "./setup/summarize-results.js";
-import {
-  log,
-  promptForMissingEnvVars,
-  loadSecretsFromFile,
-  saveSecretsToFile,
-  getSecretsFilePath,
-  appendToShellRc,
-} from "../utils.js";
+import { promptForMcpKeys } from "./setup/mcp-keys.js";
+import { log } from "../utils.js";
 import { performCleanInstall, restoreFromBackup } from "../utils/backup.js";
 import { resolveInstallMode, type ResolvedInstallMode } from "../install-mode.js";
 import { rollbackAddOnTop, type DeployMode } from "../add-on-top.js";
@@ -42,13 +36,6 @@ function toDeployMode(resolved: ResolvedInstallMode): DeployMode {
     claudeDir: resolved.resolvedEnv.claudeDir,
   };
 }
-
-// MCP servers that require API keys, in order of likelihood
-const MCP_ENV_VARS: { key: string; description: string }[] = [
-  { key: "DOCFORK_API_KEY", description: "Docfork documentation MCP server" },
-  { key: "GITHUB_PAT", description: "GitHub MCP server" },
-  { key: "COMPOSIO_API_KEY", description: "Composio workflow MCP (ak_... from app.composio.dev)" },
-];
 
 async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment, deployMode?: DeployMode): Promise<void> {
   clack.intro(
@@ -125,74 +112,7 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
   renderRestartHints(allResults);
   renderManualSteps(allResults);
 
-  // --- 9. Post-install MCP key checklist ---
-  // Show only if we installed categories that need API keys
-  const installedCategoryIds = new Set(selectedCategories.map((c) => c.id));
-  const needsKeys = MCP_ENV_VARS.filter(({ key }) => {
-    if (key === "DOCFORK_API_KEY") return installedCategoryIds.has("browser-web");
-    if (key === "GITHUB_PAT") return installedCategoryIds.has("github");
-    if (key === "COMPOSIO_API_KEY") return installedCategoryIds.has("workflow");
-    return false;
-  });
-
-  if (needsKeys.length > 0) {
-    // Load any previously saved keys so we don't re-prompt for them
-    const secretsPath = getSecretsFilePath(env.homeDir);
-    const savedSecrets = await loadSecretsFromFile(secretsPath);
-
-    // What's truly missing = not in env AND not in saved file
-    const missing = needsKeys.filter(({ key }) => !process.env[key] && !savedSecrets[key]);
-    const alreadyKnown = needsKeys.filter(({ key }) => process.env[key] || savedSecrets[key]);
-
-    if (alreadyKnown.length > 0) {
-      clack.note(
-        [
-          "Already configured (from environment or ~/.config/yka-code/secrets.env):",
-          ...alreadyKnown.map(({ key, description }) => `  ${pc.green("✓")} ${pc.bold(key)}  ${pc.dim(`(${description})`)}`),
-        ].join("\n"),
-        "API keys on file",
-      );
-    }
-
-    if (missing.length > 0) {
-      const keyLines = [
-        "To activate these MCP servers, provide these API keys:",
-        ...missing.map(({ key, description }) => `  ${pc.cyan("-")} ${pc.bold(key)}  ${pc.dim(`(${description})`)}`),
-        "",
-        pc.dim("Saved to ~/.config/yka-code/secrets.env (chmod 600) and sourced from your shell rc."),
-      ];
-      clack.note(keyLines.join("\n"), "Required API keys");
-
-      const setupKeys = await clack.confirm({
-        message: "Enter the missing API keys now?",
-        initialValue: true,
-      });
-
-      if (!clack.isCancel(setupKeys) && setupKeys) {
-        const newTokens = await promptForMissingEnvVars(missing, true, savedSecrets);
-
-        if (Object.keys(newTokens).length > 0) {
-          try {
-            await saveSecretsToFile(secretsPath, newTokens);
-            // Wire shell rc to source the secrets file (idempotent via marker).
-            await appendToShellRc(
-              env,
-              [
-                `[ -f "${secretsPath}" ] && source "${secretsPath}"`,
-              ],
-              "secrets",
-            );
-            log.success(`Saved ${Object.keys(newTokens).length} key(s) to ${secretsPath}`);
-            log.info(`Reload your shell to activate: ${pc.cyan(`source ${env.shellRcPath}`)}`);
-          } catch (err) {
-            log.error(`Failed to save secrets: ${err instanceof Error ? err.message : String(err)}`);
-          }
-        }
-      }
-    } else {
-      log.success("All required API keys are already configured — nothing to prompt for.");
-    }
-  }
+  await promptForMcpKeys(env, selectedCategories);
 
   if (!dryRun) await recordJournal(env, "all");
 
