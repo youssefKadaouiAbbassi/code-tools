@@ -15,6 +15,13 @@ import {
   recordJournal,
 } from "./setup/execute-installs.js";
 import {
+  formatEnvLine,
+  renderLocalScopeSummary,
+  renderInstallSummary,
+  renderRestartHints,
+  renderManualSteps,
+} from "./setup/summarize-results.js";
+import {
   log,
   promptForMissingEnvVars,
   loadSecretsFromFile,
@@ -42,24 +49,6 @@ const MCP_ENV_VARS: { key: string; description: string }[] = [
   { key: "GITHUB_PAT", description: "GitHub MCP server" },
   { key: "COMPOSIO_API_KEY", description: "Composio workflow MCP (ak_... from app.composio.dev)" },
 ];
-
-function formatEnvLine(env: DetectedEnvironment): string {
-  const osLabel =
-    env.os === "macos"
-      ? `macOS (${env.arch})`
-      : `Linux${env.linuxDistro ? ` / ${env.linuxDistro}` : ""} (${env.arch})`;
-
-  const lines: string[] = [
-    `OS:              ${osLabel}`,
-    `Shell:           ${env.shell}`,
-    `Package manager: ${env.packageManager}`,
-    `Claude Code:     ${env.claudeCodeVersion ? `${env.claudeCodeVersion} ${pc.green("✓")}` : pc.yellow("not found")}`,
-    `Docker:          ${env.dockerAvailable ? pc.green("available ✓") : pc.yellow("not available")}`,
-    `Bun:             ${env.bunVersion ? `${env.bunVersion} ${pc.green("✓")}` : pc.yellow("not found")}`,
-  ];
-
-  return lines.join("\n");
-}
 
 async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment, deployMode?: DeployMode): Promise<void> {
   clack.intro(
@@ -97,14 +86,7 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
 
   if (isLocalScope(env)) {
     const report = await verifyAll(env, coreResults);
-    clack.note(
-      `Project-scope install complete in ${env.claudeDir}.\nCategory installers skipped — MCPs/binaries belong at user scope.\nRun without --local to install those globally.`,
-      "Local install complete",
-    );
-    clack.note(
-      `Verification: ${pc.green(String(report.passed))} passed, ${report.failed > 0 ? pc.red(String(report.failed)) : pc.dim("0")} failed`,
-      "Summary",
-    );
+    renderLocalScopeSummary(env, report);
     clack.outro(pc.bold("Setup complete!"));
     return;
   }
@@ -139,61 +121,9 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
   const report = await verifyAll(env, allResults);
   vs.stop("Verification complete");
 
-  // --- 8. Summary ---
-  const installed = allResults.filter((r) => r.status === "installed" || r.status === "already-installed").length;
-  const skipped = allResults.filter((r) => r.status === "skipped").length;
-  const failed = allResults.filter((r) => r.status === "failed");
-
-  const summaryLines: string[] = [
-    `Installed: ${pc.green(String(installed))} components`,
-    `Skipped:   ${pc.dim(String(skipped))}`,
-    `Failed:    ${failed.length > 0 ? pc.red(String(failed.length)) : pc.dim("0")}`,
-  ];
-
-  if (failed.length > 0) {
-    summaryLines.push("", "Failed components:");
-    for (const f of failed) {
-      summaryLines.push(`  ${pc.red("•")} ${f.component}: ${pc.dim(f.message)}`);
-    }
-  }
-
-  summaryLines.push(
-    "",
-    `Verification: ${pc.green(String(report.passed))} passed, ${report.failed > 0 ? pc.red(String(report.failed)) : pc.dim("0")} failed`
-  );
-
-  clack.note(summaryLines.join("\n"), "Installation summary");
-
-  // --- 8.5. Restart hints (any installed component that needs Claude Code restart) ---
-  const claudeHudResult = allResults.find(r => r.component === "Claude HUD");
-  if (claudeHudResult && (claudeHudResult.status === "installed" || claudeHudResult.status === "already-installed")) {
-    clack.note(
-      `${pc.bold("Claude HUD")} is wired into your statusline. ${pc.dim("Quit and relaunch Claude Code to see it.")}`,
-      "ℹ️  Restart needed",
-    );
-  }
-
-  // --- 8.6. Manual steps summary ---
-  // Collect components whose install is complete on our side but require a one-time
-  // user action (download a GUI app, pick a channel plugin, authenticate a SaaS, etc.).
-  // Messages here should be copy-pasteable commands or URLs — not long explanations.
-  const manualSteps: { name: string; action: string }[] = [];
-
-  for (const r of allResults) {
-    if (r.component === "Claude Code Action") {
-      manualSteps.push({
-        name: "Claude Code Action",
-        action: "Add `uses: anthropics/claude-code-action@v1` to a workflow in .github/workflows/ of any repo you want reviewed",
-      });
-    }
-  }
-
-  if (manualSteps.length > 0) {
-    clack.note(
-      manualSteps.map((s) => `${pc.cyan("•")} ${pc.bold(s.name)}\n  ${s.action}`).join("\n\n"),
-      "📝 Manual steps remaining",
-    );
-  }
+  renderInstallSummary(allResults, report);
+  renderRestartHints(allResults);
+  renderManualSteps(allResults);
 
   // --- 9. Post-install MCP key checklist ---
   // Show only if we installed categories that need API keys
