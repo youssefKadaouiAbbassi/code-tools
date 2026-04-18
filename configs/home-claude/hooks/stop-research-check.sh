@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "stop-research-check"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # Stop hook: audit the just-ended turn for unsourced library claims.
 # Scans the last assistant message in transcript_path for library/framework
 # name + version pattern; if found and no docfork/deepwiki/github MCP tool
@@ -11,10 +12,9 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-input="$(cat 2>/dev/null || true)"
-: "${input:=}"
+read_hook_stdin
 
-transcript="$(printf '%s' "$input" | jq -r '.transcript_path // empty')"
+transcript="$(printf '%s' "$HOOK_INPUT" | jq -r '.transcript_path // empty')"
 [[ -z "$transcript" || ! -f "$transcript" ]] && exit 0
 
 # Research MCP tool names we count as valid research.

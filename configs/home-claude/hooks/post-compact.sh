@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "post-compact"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # PostCompact hook: hash + archive each compaction summary for audit provenance.
 # Input: {trigger, compact_summary:"...", session_id, transcript_path}
 set -euo pipefail
@@ -9,13 +10,13 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-input="$(cat)"
+read_hook_stdin
 archive_dir="${HOME}/.claude/compact-archive"
 mkdir -p "$archive_dir"
 
-session_id="$(printf '%s' "$input" | jq -r '.session_id // "unknown"')"
-trigger="$(printf '%s' "$input" | jq -r '.trigger // "unknown"')"
-summary="$(printf '%s' "$input" | jq -r '.compact_summary // ""')"
+session_id="$(hook_session_id)"; : "${session_id:=unknown}"
+trigger="$(printf '%s' "$HOOK_INPUT" | jq -r '.trigger // "unknown"')"
+summary="$(printf '%s' "$HOOK_INPUT" | jq -r '.compact_summary // ""')"
 stamp="$(date '+%Y%m%dT%H%M%S%z')"
 
 out="${archive_dir}/${stamp}-${session_id}.md"

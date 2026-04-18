@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "file-changed"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # FileChanged hook: flag out-of-band edits to trust-sensitive config files.
 # Input: {file_path, event:"change"|"add"|"unlink"}
 # Matcher in settings.json limits which files trigger this hook.
@@ -10,14 +11,12 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-input="$(cat)"
-log_dir="${HOME}/.claude/session-logs"
-mkdir -p "$log_dir"
-log_file="${log_dir}/config-changes.log"
+read_hook_stdin
+log_file="$(hook_log_dir)/config-changes.log"
 
 stamp="$(date '+%Y-%m-%dT%H:%M:%S%z')"
-file_path="$(printf '%s' "$input" | jq -r '.file_path // "unknown"')"
-event="$(printf '%s' "$input" | jq -r '.event // "unknown"')"
+file_path="$(printf '%s' "$HOOK_INPUT" | jq -r '.file_path // "unknown"')"
+event="$(printf '%s' "$HOOK_INPUT" | jq -r '.event // "unknown"')"
 
 printf '%s | %s %s\n' "$stamp" "$event" "$file_path" >>"$log_file"
 

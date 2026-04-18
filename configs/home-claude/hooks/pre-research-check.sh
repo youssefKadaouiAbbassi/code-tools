@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "pre-research-check"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # PreToolUse(WebSearch|WebFetch|mcp__docfork__*|mcp__deepwiki__*|mcp__github__*):
 # advisory warning if research-first skill was not invoked this turn. Non-blocking.
 set -uo pipefail
@@ -7,17 +8,16 @@ trap 'exit 0' ERR
 
 command -v jq >/dev/null 2>&1 || exit 0
 
-input="$(cat 2>/dev/null || true)"
-: "${input:=}"
+read_hook_stdin
 
-tool_name="$(printf '%s' "$input" | jq -r '.tool_name // empty')"
+tool_name="$(hook_tool_name)"
 case "$tool_name" in
   WebSearch|WebFetch) ;;
   mcp__docfork__*|mcp__deepwiki__*|mcp__github__*) ;;
   *) exit 0 ;;
 esac
 
-transcript="$(printf '%s' "$input" | jq -r '.transcript_path // empty')"
+transcript="$(printf '%s' "$HOOK_INPUT" | jq -r '.transcript_path // empty')"
 [[ -z "$transcript" || ! -f "$transcript" ]] && exit 0
 
 turn_start="$(awk '/"role": *"user"/ { start = NR } END { print (start ? start : 1) }' "$transcript")"

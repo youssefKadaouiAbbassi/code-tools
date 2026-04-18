@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "pre-secrets-guard"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 set -euo pipefail
 
 # PreToolUse hook: blocks tool inputs containing secrets or credentials.
@@ -11,12 +12,12 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-input="$(cat)"
+read_hook_stdin
 
-tool_name="$(printf '%s' "$input" | jq -r '.tool_name // empty')"
+tool_name="$(hook_tool_name)"
 
 # Serialize tool input to string for pattern matching
-tool_input_str="$(printf '%s' "$input" | jq -r '.tool_input | tostring')"
+tool_input_str="$(printf '%s' "$HOOK_INPUT" | jq -r '.tool_input | tostring')"
 
 if [[ -z "$tool_input_str" ]]; then
   exit 0

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "post-lint-gate"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 set -euo pipefail
 
 # PostToolUse hook: auto-detects stack and runs appropriate linter after file edits.
@@ -10,9 +11,9 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-input="$(cat)"
+read_hook_stdin
 
-tool_name="$(printf '%s' "$input" | jq -r '.tool_name // empty')"
+tool_name="$(hook_tool_name)"
 
 # Only run after file edit tools
 case "$tool_name" in
@@ -20,7 +21,7 @@ case "$tool_name" in
   *) exit 0 ;;
 esac
 
-file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.path // empty')"
+file_path="$(printf '%s' "$HOOK_INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty')"
 
 if [[ -z "$file_path" ]] || [[ ! -f "$file_path" ]]; then
   exit 0

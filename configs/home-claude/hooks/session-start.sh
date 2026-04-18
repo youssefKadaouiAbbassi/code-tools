@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "session-start"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # SessionStart hook: yka-code banner + autoskills auto-seed.
 # CC renders hook output as a visible panel only when emitted as JSON with
 # `systemMessage`. We build the banner in a buffer, JSON-escape it via python,
@@ -7,8 +8,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "session-start"
 set -u
 trap 'exit 0' ERR
 
-input="$(cat 2>/dev/null || true)"
-: "${input:=}"
+read_hook_stdin
 
 BOLD=$'\e[1m'; DIM=$'\e[2m'; RESET=$'\e[0m'
 CYAN=$'\e[36m'; GREEN=$'\e[32m'; YELLOW=$'\e[33m'

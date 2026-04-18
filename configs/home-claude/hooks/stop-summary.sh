@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "stop-summary"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # Stop hook: scans recently modified files for debug patterns.
 # Advisory only — reports findings but never blocks completion.
 # NOTE: no `set -e`, no `pipefail` — grep|head SIGPIPE would otherwise
@@ -8,8 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "stop-summary"
 set -u
 trap 'exit 0' ERR
 
-input="$(cat 2>/dev/null || true)"
-: "${input:=}"
+read_hook_stdin
 
 # Skip when launched outside a project (e.g., $HOME) — scanning home dir
 # floods output with Chrome caches, JSONL transcripts, etc.
@@ -75,7 +75,7 @@ fi
 # If Write/Edit/MultiEdit hit ≥4 distinct files AND no TeamCreate/SendMessage
 # call happened, the work may have been parallelizable. Advisory only.
 if command -v jq >/dev/null 2>&1; then
-  transcript="$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null || true)"
+  transcript="$(printf '%s' "$HOOK_INPUT" | jq -r '.transcript_path // empty' 2>/dev/null || true)"
   if [[ -n "$transcript" && -f "$transcript" ]]; then
     turn_start="$(awk '/"role": *"user"/ { start = NR } END { print (start ? start : 1) }' "$transcript" 2>/dev/null || echo 1)"
     turn_json="$(sed -n "${turn_start},\$p" "$transcript" 2>/dev/null || true)"

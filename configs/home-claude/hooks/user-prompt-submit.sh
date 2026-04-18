@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "user-prompt-submit"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # UserPromptSubmit hook: inject today's ISO date and current git branch into
 # every turn via the `additionalContext` field of the advanced JSON response.
 # Kills the training-cutoff class of bugs — Claude always has the correct date
@@ -7,12 +8,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "user-prompt-submit"
 set -euo pipefail
 trap 'exit 0' ERR
 
-input="$(cat 2>/dev/null || true)"
-: "${input:=}"
+read_hook_stdin
 
 cwd=""
 if command -v jq >/dev/null 2>&1; then
-  cwd="$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null || true)"
+  cwd="$(printf '%s' "$HOOK_INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)"
 fi
 [[ -z "$cwd" ]] && cwd="$(pwd)"
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "pre-destructive-blocker"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 set -euo pipefail
 
 # PreToolUse hook: blocks destructive patterns that settings.json deny can't
@@ -12,14 +13,14 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-input="$(cat)"
-tool_name="$(printf '%s' "$input" | jq -r '.tool_name // empty')"
+read_hook_stdin
+tool_name="$(hook_tool_name)"
 
 if [[ "$tool_name" != "Bash" ]]; then
   exit 0
 fi
 
-command="$(printf '%s' "$input" | jq -r '.tool_input.command // empty')"
+command="$(printf '%s' "$HOOK_INPUT" | jq -r '.tool_input.command // empty')"
 if [[ -z "$command" ]]; then
   exit 0
 fi

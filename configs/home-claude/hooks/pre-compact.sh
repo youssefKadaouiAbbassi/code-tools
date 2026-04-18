@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "pre-compact"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # PreCompact hook: block auto-compact when transcript contains active secrets.
 # Input: {trigger:"manual"|"auto", custom_instructions:"", transcript_path:"..."}
 # Exit 2 blocks the compaction; stderr is fed back to Claude.
@@ -10,9 +11,9 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-input="$(cat)"
-trigger="$(printf '%s' "$input" | jq -r '.trigger // "unknown"')"
-transcript="$(printf '%s' "$input" | jq -r '.transcript_path // empty')"
+read_hook_stdin
+trigger="$(printf '%s' "$HOOK_INPUT" | jq -r '.trigger // "unknown"')"
+transcript="$(printf '%s' "$HOOK_INPUT" | jq -r '.transcript_path // empty')"
 
 # Only gate auto-compact — manual means the user accepted the loss.
 [[ "$trigger" != "auto" ]] && exit 0

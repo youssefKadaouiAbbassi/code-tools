@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "pre-pr-gate"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # PreToolUse(Bash): gate commands that create PRs or push to a remote branch.
 # Blocks pushes to the default branch; warns on missing recent tests; advises
 # on oversize diffs. Runs only on specific commands — cheap for everything else.
@@ -9,14 +10,14 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-input="$(cat)"
-tool_name="$(printf '%s' "$input" | jq -r '.tool_name // empty')"
+read_hook_stdin
+tool_name="$(hook_tool_name)"
 
 if [[ "$tool_name" != "Bash" ]]; then
   exit 0
 fi
 
-command_str="$(printf '%s' "$input" | jq -r '.tool_input.command // empty')"
+command_str="$(printf '%s' "$HOOK_INPUT" | jq -r '.tool_input.command // empty')"
 if [[ -z "$command_str" ]]; then
   exit 0
 fi

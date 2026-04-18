@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/_hook-guard.sh" "elicitation"
+source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # Elicitation hook: log every MCP elicitation + flag non-allowlisted sources.
 # Input: {mcp_server_name, message, mode:"form"|"url", requested_schema?, session_id}
 # Passive observer — does not override the decision (action enum undocumented in v2.1.112).
@@ -11,13 +12,11 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-input="$(cat)"
+read_hook_stdin
 allowlist="${CC_ELICITATION_ALLOWLIST:-serena,docfork,deepwiki,github,claude-mem,context-mode,composio,snyk,stitch}"
-server="$(printf '%s' "$input" | jq -r '.mcp_server_name // ""')"
+server="$(printf '%s' "$HOOK_INPUT" | jq -r '.mcp_server_name // ""')"
 
-log_dir="${HOME}/.claude/session-logs"
-mkdir -p "$log_dir"
-log_file="${log_dir}/elicitations.log"
+log_file="$(hook_log_dir)/elicitations.log"
 stamp="$(date '+%Y-%m-%dT%H:%M:%S%z')"
 
 case ",${allowlist}," in
