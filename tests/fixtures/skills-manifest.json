@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "entries": [
+    "audit-rigor",
+    "ci-hygiene",
+    "coding-style",
+    "do",
+    "doc-hygiene",
+    "evals-first",
+    "fix-bug",
+    "knowledge-base",
+    "loop-patterns",
+    "onboard-codebase",
+    "pre-review-checklist",
+    "refactor-safely",
+    "release-cut",
+    "research-first",
+    "security-audit",
+    "setup",
+    "ship-feature",
+    "skill-authoring",
+    "tdd-first",
+    "team-do",
+    "worktree-task"
+  ]
+}

@@ -1,0 +1,24 @@
+ℹ [dry-run] Would create add-on-top writelog at $HOME/.claude/.omc-addontop-<TS>
+ℹ Tier: core, dry-run: true
+ℹ OS: $OS ($ARCH), shell: $SHELL, pkg: $PKGMGR
+ℹ [dry-run] Would merge $REPO/configs/home-claude/settings.json into $HOME/.claude/settings.json
+ℹ [dry-run] Would copy $REPO/configs/home-claude/CLAUDE.md -> $HOME/.claude/CLAUDE.md
+ℹ [dry-run] Would create symlinks AGENTS.md -> CLAUDE.md and GEMINI.md -> CLAUDE.md
+ℹ [dry-run] Would deploy 20 hook(s) to $HOME/.claude/hooks with chmod 755
+ℹ [dry-run] Would deploy 21 skills from $REPO/skills to $HOME/.claude/skills
+ℹ [dry-run] Would deploy 4 command(s) from $REPO/commands to $HOME/.claude/commands
+ℹ [dry-run] Would deploy 3 agent(s) from $REPO/agents to $HOME/.claude/agents
+ℹ [dry-run] Would copy $REPO/configs/tmux.conf -> $HOME/.tmux.conf
+ℹ [dry-run] Would copy $REPO/configs/starship.toml -> $HOME/.config/starship.toml
+ℹ [dry-run] Would append starship init to $HOME/.$SHELLRC
+ℹ [dry-run] Would install mise via curl https://mise.run | sh
+ℹ [dry-run] Would append mise activate to $HOME/.$SHELLRC
+ℹ [dry-run] Would run: git config --global alias.wt "worktree"
+ℹ [dry-run] Would run: git config --global alias.wta "worktree add"
+ℹ [dry-run] Would run: git config --global alias.wtl "worktree list"
+ℹ [dry-run] Would run: git config --global alias.wtr "worktree remove"
+ℹ [dry-run] Would append Claude Code env vars to $HOME/.$SHELLRC
+ℹ [dry-run] Would append CAVEMAN_DEFAULT_MODE=full to $HOME/.$SHELLRC
+ℹ [dry-run] Would create $REPO/tasks/lessons.md if it does not exist
+ℹ Core tier complete.
+ℹ Verification: <N> passed, <N> failed, <N> skipped
