@@ -18,7 +18,6 @@ required_hooks=(
   post-compact.sh
   stop-failure.sh
   permission-denied.sh
-  cwd-changed.sh
   elicitation.sh
   file-changed.sh
 )
