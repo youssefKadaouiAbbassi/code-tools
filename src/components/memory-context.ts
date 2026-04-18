@@ -273,11 +273,19 @@ const contextModeSpec: ComponentSpec = {
           verifyPassed: false,
         };
       }
-      await registerMcp("context-mode", {
+      const ok = await registerMcp("context-mode", {
         transport: "stdio",
         command: "npx",
         args: ["-y", "context-mode"],
       });
+      if (!ok) {
+        return {
+          component: "context-mode",
+          status: "failed",
+          message: "context-mode MCP registration failed — check `claude mcp list` and retry",
+          verifyPassed: false,
+        };
+      }
       log.success("context-mode MCP server registered");
       return {
         component: "context-mode",

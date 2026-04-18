@@ -228,12 +228,20 @@ const docforkSpec: ComponentSpec = {
           verifyPassed: false,
         };
       }
-      await registerMcp("docfork", {
+      const ok = await registerMcp("docfork", {
         transport: "stdio",
         command: "npx",
         args: ["-y", "docfork"],
         env: { DOCFORK_API_KEY: key },
       });
+      if (!ok) {
+        return {
+          component: "Docfork",
+          status: "failed",
+          message: "Docfork MCP registration failed — check `claude mcp list` and retry",
+          verifyPassed: false,
+        };
+      }
       log.success(`Docfork MCP server registered (DOCFORK_API_KEY found, ${key.length}-char key)`);
       return {
         component: "Docfork",
@@ -273,10 +281,18 @@ const deepwikiSpec: ComponentSpec = {
           verifyPassed: false,
         };
       }
-      await registerMcp("deepwiki", {
+      const ok = await registerMcp("deepwiki", {
         transport: "http",
         url: "https://mcp.deepwiki.com/mcp",
       });
+      if (!ok) {
+        return {
+          component: "DeepWiki",
+          status: "failed",
+          message: "DeepWiki MCP registration failed — check `claude mcp list` and retry",
+          verifyPassed: false,
+        };
+      }
       log.success("DeepWiki MCP server registered");
       return {
         component: "DeepWiki",

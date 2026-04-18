@@ -124,11 +124,19 @@ const githubMcpSpec: ComponentSpec = {
           verifyPassed: false,
         };
       }
-      await registerMcp("github", {
+      const ok = await registerMcp("github", {
         transport: "http",
         url: "https://api.githubcopilot.com/mcp/",
         headers: { Authorization: `Bearer ${pat}` },
       });
+      if (!ok) {
+        return {
+          component: "github-mcp",
+          status: "failed",
+          message: "github-mcp MCP registration failed — check `claude mcp list` and retry",
+          verifyPassed: false,
+        };
+      }
       log.success("GitHub MCP server registered");
       return {
         component: "github-mcp",

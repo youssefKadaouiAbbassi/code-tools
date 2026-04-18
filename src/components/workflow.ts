@@ -107,11 +107,19 @@ const composioSpec: ComponentSpec = {
         };
       }
 
-      await registerMcp("composio", {
+      const ok = await registerMcp("composio", {
         transport: "http",
         url: `https://backend.composio.dev/v3/mcp/${serverId}?user_id=${encodeURIComponent(userId)}`,
         headers: { "x-api-key": key },
       });
+      if (!ok) {
+        return {
+          component: "Composio",
+          status: "failed",
+          message: "Composio MCP registration failed — check `claude mcp list` and retry",
+          verifyPassed: false,
+        };
+      }
       log.success("Composio MCP server registered");
       return {
         component: "Composio",

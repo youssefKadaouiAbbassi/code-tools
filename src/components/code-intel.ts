@@ -100,20 +100,34 @@ export const serenaSpec: ComponentSpec = {
 
       await $`sh -c 'export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"; uv tool install -p 3.13 serena-agent@latest --prerelease=allow --force'`;
       const installed = commandExists("serena") || commandExists("serena-agent");
-      if (installed) {
-        const serenaCmd = commandExists("serena") ? "serena" : "serena-agent";
-        await registerMcp("serena", {
-          transport: "stdio",
-          command: serenaCmd,
-          args: ["start-mcp-server", "--project", "."],
-        });
-        log.success("Serena MCP server registered");
+      if (!installed) {
+        return {
+          component: "Serena",
+          status: "failed",
+          message: "Serena install ran but binary not found",
+          verifyPassed: false,
+        };
       }
+      const serenaCmd = commandExists("serena") ? "serena" : "serena-agent";
+      const ok = await registerMcp("serena", {
+        transport: "stdio",
+        command: serenaCmd,
+        args: ["start-mcp-server", "--project", "."],
+      });
+      if (!ok) {
+        return {
+          component: "Serena",
+          status: "failed",
+          message: "Serena binary installed but MCP registration failed — run `claude mcp add serena` manually",
+          verifyPassed: false,
+        };
+      }
+      log.success("Serena MCP server registered");
       return {
         component: "Serena",
-        status: installed ? "installed" : "failed",
-        message: installed ? (existed ? "Serena upgraded to latest" : "Serena installed successfully") : "Serena install ran but binary not found",
-        verifyPassed: installed,
+        status: "installed",
+        message: existed ? "Serena upgraded to latest" : "Serena installed successfully",
+        verifyPassed: true,
       };
     } catch (err) {
       return {
