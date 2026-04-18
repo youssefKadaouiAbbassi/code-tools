@@ -1,6 +1,8 @@
 import { $ } from "bun";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, log } from "../utils.js";
+import type { ComponentSpec } from "./framework.js";
+import { runComponent } from "./framework.js";
 
 export const securityCategory: ComponentCategory = {
   id: "security",
@@ -45,58 +47,91 @@ export const securityCategory: ComponentCategory = {
   ],
 };
 
-export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
-  const results: InstallResult[] = [];
-
-  // --- Snyk MCP ---
-  try {
-    const existed = commandExists("snyk");
-    if (dryRun) {
-      const verb = existed ? "upgrade" : "install";
-      log.info(`[dry-run] Would ${verb}: npm install -g snyk@latest && snyk mcp configure --tool=claude-cli`);
-      results.push({
-        component: "Snyk MCP",
-        status: "skipped",
-        message: `[dry-run] Would ${verb} Snyk MCP`,
-        verifyPassed: false,
-      });
-    } else {
+const snykSpec: ComponentSpec = {
+  id: 5,
+  name: "snyk",
+  displayName: "Snyk MCP",
+  description: "Security vulnerability scanning MCP server",
+  tier: "recommended",
+  category: "security",
+  probe: async () => ({ present: commandExists("snyk") }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (_env, _plan, dryRun) => {
+    try {
+      const existed = commandExists("snyk");
+      if (dryRun) {
+        const verb = existed ? "upgrade" : "install";
+        log.info(`[dry-run] Would ${verb}: npm install -g snyk@latest && snyk mcp configure --tool=claude-cli`);
+        return {
+          component: "Snyk MCP",
+          status: "skipped",
+          message: `[dry-run] Would ${verb} Snyk MCP`,
+          verifyPassed: false,
+        };
+      }
       await $`sh -c "npm install -g snyk@latest"`;
-      await $`sh -c "snyk mcp configure --tool=claude-cli"`.nothrow();
+      const configure = await $`sh -c "snyk mcp configure --tool=claude-cli"`.nothrow();
       const installed = commandExists("snyk");
-      results.push({
+      if (!installed) {
+        return {
+          component: "Snyk MCP",
+          status: "failed",
+          message: "Snyk MCP setup ran but binary not found",
+          verifyPassed: false,
+        };
+      }
+      if (configure.exitCode !== 0) {
+        return {
+          component: "Snyk MCP",
+          status: "failed",
+          message: `snyk mcp configure exited ${configure.exitCode} — run \`snyk mcp configure --tool=claude-cli\` manually: ${configure.stderr.toString().slice(0, 200)}`,
+          verifyPassed: false,
+        };
+      }
+      return {
         component: "Snyk MCP",
-        status: installed ? "installed" : "failed",
-        message: installed ? (existed ? "Snyk upgraded + MCP reconfigured" : "Snyk MCP configured successfully") : "Snyk MCP setup ran but binary not found",
-        verifyPassed: installed,
-      });
-    }
-  } catch (err) {
-    results.push({
-      component: "Snyk MCP",
-      status: "failed",
-      message: `Snyk MCP setup failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
-
-  // --- container-use ---
-  try {
-    const cuExists = () => commandExists("container-use") || commandExists("cu");
-    const existed = cuExists();
-    if (dryRun) {
-      const verb = existed ? "upgrade" : "install";
-      const cmd = env.packageManager === "brew"
-        ? (existed ? "brew upgrade dagger/tap/container-use" : "brew install dagger/tap/container-use")
-        : "curl --connect-timeout 15 --max-time 300 -fsSL https://dl.dagger.io/container-use/install.sh | sh";
-      log.info(`[dry-run] Would ${verb}: ${cmd}`);
-      results.push({
-        component: "container-use",
-        status: "skipped",
-        message: `[dry-run] Would ${verb} container-use`,
+        status: "installed",
+        message: existed ? "Snyk upgraded + MCP reconfigured" : "Snyk MCP configured successfully",
+        verifyPassed: true,
+      };
+    } catch (err) {
+      return {
+        component: "Snyk MCP",
+        status: "failed",
+        message: `Snyk MCP setup failed: ${err instanceof Error ? err.message : String(err)}`,
         verifyPassed: false,
-      });
-    } else {
+      };
+    }
+  },
+  verify: async () => commandExists("snyk"),
+};
+
+const containerUseSpec: ComponentSpec = {
+  id: 15,
+  name: "cu",
+  displayName: "container-use",
+  description: "Sandboxed container execution via Dagger",
+  tier: "recommended",
+  category: "security",
+  probe: async () => ({ present: commandExists("container-use") || commandExists("cu") }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (env, _plan, dryRun) => {
+    try {
+      const cuExists = () => commandExists("container-use") || commandExists("cu");
+      const existed = cuExists();
+      if (dryRun) {
+        const verb = existed ? "upgrade" : "install";
+        const cmd = env.packageManager === "brew"
+          ? (existed ? "brew upgrade dagger/tap/container-use" : "brew install dagger/tap/container-use")
+          : "curl --connect-timeout 15 --max-time 300 -fsSL https://dl.dagger.io/container-use/install.sh | sh";
+        log.info(`[dry-run] Would ${verb}: ${cmd}`);
+        return {
+          component: "container-use",
+          status: "skipped",
+          message: `[dry-run] Would ${verb} container-use`,
+          verifyPassed: false,
+        };
+      }
       let cmd: string;
       if (env.packageManager === "brew") {
         cmd = existed ? "brew upgrade dagger/tap/container-use" : "brew install dagger/tap/container-use";
@@ -116,21 +151,30 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       }
       await $`sh -c ${cmd}`.nothrow();
       const installed = cuExists();
-      results.push({
+      return {
         component: "container-use",
         status: installed ? "installed" : "failed",
         message: installed ? (existed ? "container-use upgraded to latest" : "container-use installed successfully") : "container-use install ran but binary not found",
         verifyPassed: installed,
-      });
+      };
+    } catch (err) {
+      return {
+        component: "container-use",
+        status: "failed",
+        message: `container-use install failed: ${err instanceof Error ? err.message : String(err)}`,
+        verifyPassed: false,
+      };
     }
-  } catch (err) {
-    results.push({
-      component: "container-use",
-      status: "failed",
-      message: `container-use install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+  },
+  verify: async () => commandExists("container-use") || commandExists("cu"),
+};
 
+export const securitySpecs: ComponentSpec[] = [snykSpec, containerUseSpec];
+
+export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
+  const results: InstallResult[] = [];
+  for (const spec of securitySpecs) {
+    results.push(await runComponent(spec, env, dryRun));
+  }
   return results;
 }

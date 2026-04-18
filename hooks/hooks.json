@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/pre-secrets-guard.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/pre-secrets-guard.sh"
           }
         ]
       },
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/pre-destructive-blocker.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/pre-destructive-blocker.sh"
           }
         ]
       },
@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/pre-pr-gate.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/pre-pr-gate.sh"
           }
         ]
       },
@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/pre-research-check.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/pre-research-check.sh"
           }
         ]
       }
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/user-prompt-submit.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/user-prompt-submit.sh"
           }
         ]
       }
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/post-lint-gate.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/post-lint-gate.sh"
           }
         ]
       },
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/post-edit-lint.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/project-claude/hooks/post-edit-lint.sh"
           }
         ]
       },
@@ -71,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/post-bash-test.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/project-claude/hooks/post-bash-test.sh"
           }
         ]
       }
@@ -81,7 +81,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/session-start.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/session-start.sh"
           }
         ]
       }
@@ -91,7 +91,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/session-end.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/session-end.sh"
           }
         ]
       }
@@ -101,7 +101,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/stop-summary.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/stop-summary.sh"
           }
         ]
       },
@@ -109,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/stop-research-check.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/stop-research-check.sh"
           }
         ]
       }
@@ -119,7 +119,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/pre-compact.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/pre-compact.sh"
           }
         ]
       }
@@ -129,7 +129,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/post-compact.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/post-compact.sh"
           }
         ]
       }
@@ -139,7 +139,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/stop-failure.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/stop-failure.sh"
           }
         ]
       }
@@ -149,7 +149,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/permission-denied.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/permission-denied.sh"
           }
         ]
       }
@@ -159,7 +159,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/elicitation.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/elicitation.sh"
           }
         ]
       }
@@ -170,7 +170,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/file-changed.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/file-changed.sh"
           }
         ]
       }
@@ -180,7 +180,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/task-created.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/task-created.sh"
           }
         ]
       }
@@ -190,7 +190,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/task-completed.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/task-completed.sh"
           }
         ]
       }
@@ -200,7 +200,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/configs/hooks/teammate-idle.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/teammate-idle.sh"
           }
         ]
       }

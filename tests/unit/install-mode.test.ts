@@ -1,6 +1,6 @@
 /** Tests for install-mode orchestrator scope resolution. */
 import { describe, test, expect } from "bun:test";
-import { resolveClaudeDir, rewriteEnvForScope } from "../../src/install-mode.js";
+import { resolveClaudeDir, rewriteEnvForScope } from "../../src/scope.js";
 import type { DetectedEnvironment } from "../../src/types.js";
 
 const fakeEnv: DetectedEnvironment = {

@@ -22,7 +22,6 @@ const HOOK_FILES = [
   "post-compact.sh",
   "stop-failure.sh",
   "permission-denied.sh",
-  "cwd-changed.sh",
   "elicitation.sh",
   "file-changed.sh",
   "task-created.sh",

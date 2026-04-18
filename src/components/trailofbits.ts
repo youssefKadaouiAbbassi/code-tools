@@ -3,6 +3,8 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, log } from "../utils.js";
+import type { ComponentSpec } from "./framework.js";
+import { runComponent } from "./framework.js";
 
 const MARKETPLACE_SLUG = "trailofbits/skills-curated";
 const MARKETPLACE_NAME = "skills-curated";
@@ -55,6 +57,73 @@ async function marketplaceRegistered(env: DetectedEnvironment): Promise<boolean>
   }
 }
 
+function pluginSpec(id: number, name: string): ComponentSpec {
+  return {
+    id,
+    name,
+    displayName: name,
+    description: `Trail of Bits vetted plugin: ${name}`,
+    tier: "optional",
+    category: "trailofbits",
+    probe: async (env) => {
+      const installed = await loadInstalledPlugins(env);
+      return { present: installed.has(`${name}@${MARKETPLACE_NAME}`) };
+    },
+    plan: () => ({ kind: "install", steps: [] }),
+    install: async (env, _plan, dryRun) => {
+      if (!commandExists("claude")) {
+        return {
+          component: name,
+          status: "skipped",
+          message: "Claude Code CLI not found — install Claude Code first",
+          verifyPassed: false,
+        };
+      }
+      if (dryRun) {
+        return {
+          component: name,
+          status: "skipped",
+          message: `[dry-run] Would install ${name}@${MARKETPLACE_NAME}`,
+          verifyPassed: false,
+        };
+      }
+      if (!(await marketplaceRegistered(env))) {
+        log.info(`Adding marketplace: ${MARKETPLACE_SLUG}`);
+        const mkt = await $`claude plugin marketplace add ${MARKETPLACE_SLUG}`.nothrow();
+        if (mkt.exitCode !== 0) {
+          return {
+            component: name,
+            status: "failed",
+            message: `claude plugin marketplace add exited with code ${mkt.exitCode}`,
+            verifyPassed: false,
+          };
+        }
+      }
+      const installed = await loadInstalledPlugins(env);
+      const key = `${name}@${MARKETPLACE_NAME}`;
+      if (installed.has(key)) {
+        return {
+          component: name,
+          status: "already-installed",
+          message: `${name} already installed`,
+          verifyPassed: true,
+        };
+      }
+      log.info(`Installing ${key}`);
+      const out = await $`claude plugin install ${key}`.nothrow();
+      return {
+        component: name,
+        status: out.exitCode === 0 ? "installed" : "failed",
+        message: out.exitCode === 0 ? `${name} installed from ${MARKETPLACE_SLUG}` : `claude plugin install ${key} exited ${out.exitCode}`,
+        verifyPassed: out.exitCode === 0,
+      };
+    },
+    verify: async () => true,
+  };
+}
+
+export const trailofbitsSpecs: ComponentSpec[] = CURATED_PLUGINS.map((n, i) => pluginSpec(300 + i, n));
+
 export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
   const results: InstallResult[] = [];
 
@@ -83,40 +152,8 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
     return results;
   }
 
-  if (!(await marketplaceRegistered(env))) {
-    log.info(`Adding marketplace: ${MARKETPLACE_SLUG}`);
-    const mkt = await $`claude plugin marketplace add ${MARKETPLACE_SLUG}`.nothrow();
-    if (mkt.exitCode !== 0) {
-      const msg = `claude plugin marketplace add exited with code ${mkt.exitCode}`;
-      for (const name of CURATED_PLUGINS) {
-        results.push({ component: name, status: "failed", message: msg, verifyPassed: false });
-      }
-      return results;
-    }
-  }
-
-  const installed = await loadInstalledPlugins(env);
-
-  for (const name of CURATED_PLUGINS) {
-    const key = `${name}@${MARKETPLACE_NAME}`;
-    if (installed.has(key)) {
-      results.push({
-        component: name,
-        status: "already-installed",
-        message: `${name} already installed`,
-        verifyPassed: true,
-      });
-      continue;
-    }
-
-    log.info(`Installing ${key}`);
-    const out = await $`claude plugin install ${key}`.nothrow();
-    results.push({
-      component: name,
-      status: out.exitCode === 0 ? "installed" : "failed",
-      message: out.exitCode === 0 ? `${name} installed from ${MARKETPLACE_SLUG}` : `claude plugin install ${key} exited ${out.exitCode}`,
-      verifyPassed: out.exitCode === 0,
-    });
+  for (const spec of trailofbitsSpecs) {
+    results.push(await runComponent(spec, env, dryRun));
   }
 
   return results;

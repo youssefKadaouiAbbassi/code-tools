@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { isLocalScope, templateDir } from "../../src/core.js";
+import { isLocalScope, templateDir } from "../../src/scope.js";
 import type { DetectedEnvironment } from "../../src/types.js";
 
 function env(overrides: Partial<DetectedEnvironment>): DetectedEnvironment {

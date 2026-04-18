@@ -155,7 +155,7 @@ export default defineCommand({
     const tier = (args.tier as string | undefined) ?? prev?.tier ?? "recommended";
     log.info(`Replaying setup with tier=${tier}${dryRun ? " (dry-run)" : ""}`);
 
-    const setupCmd = await import("./setup.js").then((m) => m.default);
+    const setupCmd = await import("./setup/index.js").then((m) => m.default);
     const rawArgs: string[] = ["--non-interactive", "--tier", tier];
     if (dryRun) rawArgs.push("--dry-run");
     if (verbose) rawArgs.push("--verbose");

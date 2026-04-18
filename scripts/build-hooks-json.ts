@@ -12,7 +12,7 @@ const outPath = join(repoRoot, "hooks", "hooks.json");
 
 const hooks = buildHooksConfig((file) => ({
   type: "command",
-  command: `\${CLAUDE_PLUGIN_ROOT}/configs/hooks/${file}`,
+  command: `\${CLAUDE_PLUGIN_ROOT}/configs/home-claude/hooks/${file}`,
 }));
 
 await Bun.write(outPath, JSON.stringify({ hooks }, null, 2) + "\n");

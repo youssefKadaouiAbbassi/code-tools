@@ -1,6 +1,10 @@
 import { $ } from "bun";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
-import { commandExists, installBinary, registerMcp, log } from "../utils.js";
+import { commandExists, log } from "../utils.js";
+import { registerMcp } from "../registry/mcp.js";
+import { installBinary } from "../packages.js";
+import type { ComponentSpec } from "./framework.js";
+import { runComponent } from "./framework.js";
 
 export const codeIntelCategory: ComponentCategory = {
   id: "code-intel",
@@ -51,104 +55,140 @@ export const codeIntelCategory: ComponentCategory = {
   ],
 };
 
-export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
-  const results: InstallResult[] = [];
-
-  // --- Serena ---
-  try {
-    const serena = codeIntelCategory.components[0];
-
-    // Ensure uv is installed first
-    if (!commandExists("uv")) {
-      log.info("uv not found, installing uv...");
-      if (dryRun) {
-        log.info("[dry-run] Would run: curl --max-time 300 -LsSf https://astral.sh/uv/install.sh | sh");
-      } else {
-        try {
-          await $`sh -c "curl --max-time 300 -LsSf https://astral.sh/uv/install.sh | sh"`;
-          process.env.PATH = `${env.homeDir}/.cargo/bin:${env.homeDir}/.local/bin:${process.env.PATH ?? ""}`;
-          log.success("uv installed");
-        } catch (err) {
-          results.push({
-            component: "uv",
-            status: "failed",
-            message: `Failed to install uv: ${err instanceof Error ? err.message : String(err)}`,
-            verifyPassed: false,
-          });
+export const serenaSpec: ComponentSpec = {
+  id: 6,
+  name: "serena-agent",
+  displayName: "Serena",
+  description: "Semantic code agent with MCP server support",
+  tier: "recommended",
+  category: "code-intel",
+  probe: async () => ({ present: commandExists("serena") || commandExists("serena-agent") }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (env, _plan, dryRun): Promise<InstallResult> => {
+    try {
+      if (!commandExists("uv")) {
+        log.info("uv not found, installing uv...");
+        if (dryRun) {
+          log.info("[dry-run] Would run: curl --max-time 300 -LsSf https://astral.sh/uv/install.sh | sh");
+        } else {
+          try {
+            await $`sh -c "curl --max-time 300 -LsSf https://astral.sh/uv/install.sh | sh"`;
+            process.env.PATH = `${env.homeDir}/.cargo/bin:${env.homeDir}/.local/bin:${process.env.PATH ?? ""}`;
+            log.success("uv installed");
+          } catch (err) {
+            return {
+              component: "uv",
+              status: "failed",
+              message: `Failed to install uv: ${err instanceof Error ? err.message : String(err)}`,
+              verifyPassed: false,
+            };
+          }
         }
       }
-    }
 
-    const serenaExisted = commandExists("serena") || commandExists("serena-agent");
-    if (dryRun) {
-      const verb = serenaExisted ? "upgrade" : "install";
-      log.info(`[dry-run] Would ${verb}: uv tool install -p 3.13 serena-agent@latest --prerelease=allow --force`);
-      results.push({
-        component: "Serena",
-        status: "skipped",
-        message: `[dry-run] Would ${verb} Serena via uv`,
-        verifyPassed: false,
-      });
-    } else {
+      const existed = commandExists("serena") || commandExists("serena-agent");
+      if (dryRun) {
+        const verb = existed ? "upgrade" : "install";
+        log.info(`[dry-run] Would ${verb}: uv tool install -p 3.13 serena-agent@latest --prerelease=allow --force`);
+        return {
+          component: "Serena",
+          status: "skipped",
+          message: `[dry-run] Would ${verb} Serena via uv`,
+          verifyPassed: false,
+        };
+      }
+
       await $`sh -c 'export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"; uv tool install -p 3.13 serena-agent@latest --prerelease=allow --force'`;
       const installed = commandExists("serena") || commandExists("serena-agent");
-      results.push({
-        component: "Serena",
-        status: installed ? "installed" : "failed",
-        message: installed ? (serenaExisted ? "Serena upgraded to latest" : "Serena installed successfully") : "Serena install ran but binary not found",
-        verifyPassed: installed,
-      });
-
-      if (installed && serena.mcpConfig) {
-        const serenaCmd = commandExists("serena") ? "serena" : "serena-agent";
-        await registerMcp("serena", {
-          transport: "stdio",
-          command: serenaCmd,
-          args: serena.mcpConfig.args,
-        });
-        log.success("Serena MCP server registered");
+      if (!installed) {
+        return {
+          component: "Serena",
+          status: "failed",
+          message: "Serena install ran but binary not found",
+          verifyPassed: false,
+        };
       }
-    }
-  } catch (err) {
-    results.push({
-      component: "Serena",
-      status: "failed",
-      message: `Serena install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
-
-  // --- ast-grep ---
-  try {
-    const existed = commandExists("ast-grep");
-    if (dryRun) {
-      const verb = existed ? "upgrade" : "install";
-      const cmd = env.packageManager === "brew" ? "brew upgrade ast-grep" : "cargo install ast-grep --locked --force";
-      log.info(`[dry-run] Would ${verb}: ${cmd}`);
-      results.push({ component: "ast-grep", status: "skipped", message: `[dry-run] Would ${verb} ast-grep`, verifyPassed: false });
-    } else if (existed) {
-      const cmd = env.packageManager === "brew" ? "brew upgrade ast-grep" : "cargo install ast-grep --locked --force";
-      await $`sh -c ${cmd}`.nothrow();
-      results.push({
-        component: "ast-grep",
-        status: "installed",
-        message: "ast-grep upgraded to latest",
-        verifyPassed: commandExists("ast-grep"),
+      const serenaCmd = commandExists("serena") ? "serena" : "serena-agent";
+      const ok = await registerMcp("serena", {
+        transport: "stdio",
+        command: serenaCmd,
+        args: ["start-mcp-server", "--project", "."],
       });
-    } else {
-      const astGrep = codeIntelCategory.components[1];
-      const pkg = astGrep.packages[0];
-      const result = await installBinary(pkg, env, dryRun);
-      results.push(result);
+      if (!ok) {
+        return {
+          component: "Serena",
+          status: "failed",
+          message: "Serena binary installed but MCP registration failed — run `claude mcp add serena` manually",
+          verifyPassed: false,
+        };
+      }
+      log.success("Serena MCP server registered");
+      return {
+        component: "Serena",
+        status: "installed",
+        message: existed ? "Serena upgraded to latest" : "Serena installed successfully",
+        verifyPassed: true,
+      };
+    } catch (err) {
+      return {
+        component: "Serena",
+        status: "failed",
+        message: `Serena install failed: ${err instanceof Error ? err.message : String(err)}`,
+        verifyPassed: false,
+      };
     }
-  } catch (err) {
-    results.push({
-      component: "ast-grep",
-      status: "failed",
-      message: `ast-grep install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+  },
+  verify: async () => commandExists("serena") || commandExists("serena-agent"),
+};
 
+export const astGrepSpec: ComponentSpec = {
+  id: 7,
+  name: "ast-grep",
+  displayName: "ast-grep",
+  description: "Fast structural search and rewrite tool for code",
+  tier: "recommended",
+  category: "code-intel",
+  probe: async () => ({ present: commandExists("ast-grep") }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (env, _plan, dryRun): Promise<InstallResult> => {
+    try {
+      const existed = commandExists("ast-grep");
+      if (dryRun) {
+        const verb = existed ? "upgrade" : "install";
+        const cmd = env.packageManager === "brew" ? "brew upgrade ast-grep" : "cargo install ast-grep --locked --force";
+        log.info(`[dry-run] Would ${verb}: ${cmd}`);
+        return { component: "ast-grep", status: "skipped", message: `[dry-run] Would ${verb} ast-grep`, verifyPassed: false };
+      }
+      if (existed) {
+        const cmd = env.packageManager === "brew" ? "brew upgrade ast-grep" : "cargo install ast-grep --locked --force";
+        await $`sh -c ${cmd}`.nothrow();
+        return {
+          component: "ast-grep",
+          status: "installed",
+          message: "ast-grep upgraded to latest",
+          verifyPassed: commandExists("ast-grep"),
+        };
+      }
+      const pkg = codeIntelCategory.components[1].packages[0];
+      return await installBinary(pkg, env, dryRun);
+    } catch (err) {
+      return {
+        component: "ast-grep",
+        status: "failed",
+        message: `ast-grep install failed: ${err instanceof Error ? err.message : String(err)}`,
+        verifyPassed: false,
+      };
+    }
+  },
+  verify: async () => commandExists("ast-grep"),
+};
+
+export const codeIntelSpecs: ComponentSpec[] = [serenaSpec, astGrepSpec];
+
+export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
+  const results: InstallResult[] = [];
+  for (const spec of codeIntelSpecs) {
+    results.push(await runComponent(spec, env, dryRun));
+  }
   return results;
 }

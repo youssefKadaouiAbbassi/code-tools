@@ -1,6 +1,9 @@
 import { $ } from "bun";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
-import { commandExists, registerMcp, log, tryGetPythonCommand } from "../utils.js";
+import { commandExists, log, tryGetPythonCommand } from "../utils.js";
+import { registerMcp } from "../registry/mcp.js";
+import type { ComponentSpec } from "./framework.js";
+import { runComponent } from "./framework.js";
 
 export const browserWebCategory: ComponentCategory = {
   id: "browser-web",
@@ -77,58 +80,78 @@ export const browserWebCategory: ComponentCategory = {
   ],
 };
 
-export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
-  const results: InstallResult[] = [];
-
-  // --- Playwright CLI ---
-  try {
-    const existed = commandExists("playwright");
-    if (dryRun) {
-      const verb = existed ? "upgrade" : "install";
-      log.info(`[dry-run] Would ${verb}: npm install -g playwright@latest`);
-      results.push({
-        component: "Playwright CLI",
-        status: "skipped",
-        message: `[dry-run] Would ${verb} Playwright CLI`,
-        verifyPassed: false,
-      });
-    } else {
+const playwrightSpec: ComponentSpec = {
+  id: 8,
+  name: "playwright",
+  displayName: "Playwright CLI",
+  description: "Browser automation and testing tool",
+  tier: "recommended",
+  category: "browser-web",
+  probe: async () => ({ present: commandExists("playwright") }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (_env, _plan, dryRun) => {
+    try {
+      const existed = commandExists("playwright");
+      if (dryRun) {
+        const verb = existed ? "upgrade" : "install";
+        log.info(`[dry-run] Would ${verb}: npm install -g playwright@latest`);
+        return {
+          component: "Playwright CLI",
+          status: "skipped",
+          message: `[dry-run] Would ${verb} Playwright CLI`,
+          verifyPassed: false,
+        };
+      }
       await $`sh -c "npm install -g playwright@latest"`;
       const installed = commandExists("playwright");
-      results.push({
+      return {
         component: "Playwright CLI",
         status: installed ? "installed" : "failed",
         message: installed ? (existed ? "Playwright CLI upgraded to latest" : "Playwright CLI installed successfully") : "Playwright CLI install ran but binary not found",
         verifyPassed: installed,
-      });
-    }
-  } catch (err) {
-    results.push({
-      component: "Playwright CLI",
-      status: "failed",
-      message: `Playwright CLI install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
-
-  // --- Crawl4AI ---
-  try {
-    const isInstalled = () =>
-      commandExists("crwl") ||
-      commandExists("crawl4ai-doctor") ||
-      commandExists("crawl4ai-setup");
-
-    const existed = isInstalled();
-    if (dryRun) {
-      const verb = existed ? "upgrade" : "install";
-      log.info(`[dry-run] Would ${verb} Crawl4AI (latest, >=0.8.6)`);
-      results.push({
-        component: "Crawl4AI",
-        status: "skipped",
-        message: `[dry-run] Would ${verb} Crawl4AI`,
+      };
+    } catch (err) {
+      return {
+        component: "Playwright CLI",
+        status: "failed",
+        message: `Playwright CLI install failed: ${err instanceof Error ? err.message : String(err)}`,
         verifyPassed: false,
-      });
-    } else {
+      };
+    }
+  },
+  verify: async () => commandExists("playwright"),
+};
+
+const crawl4aiSpec: ComponentSpec = {
+  id: 9,
+  name: "crawl4ai",
+  displayName: "Crawl4AI",
+  description: "AI-ready web crawler (pin v0.8.6+)",
+  tier: "recommended",
+  category: "browser-web",
+  probe: async () => ({
+    present: commandExists("crwl") || commandExists("crawl4ai-doctor") || commandExists("crawl4ai-setup"),
+  }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (_env, _plan, dryRun) => {
+    try {
+      const isInstalled = () =>
+        commandExists("crwl") ||
+        commandExists("crawl4ai-doctor") ||
+        commandExists("crawl4ai-setup");
+
+      const existed = isInstalled();
+      if (dryRun) {
+        const verb = existed ? "upgrade" : "install";
+        log.info(`[dry-run] Would ${verb} Crawl4AI (latest, >=0.8.6)`);
+        return {
+          component: "Crawl4AI",
+          status: "skipped",
+          message: `[dry-run] Would ${verb} Crawl4AI`,
+          verifyPassed: false,
+        };
+      }
+
       log.info(existed ? "Upgrading Crawl4AI to latest" : "Installing Crawl4AI latest");
       let installCmd: string;
       if (existed && commandExists("pipx")) {
@@ -155,95 +178,146 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
           verified = false;
         }
       }
-      results.push({
+      return {
         component: "Crawl4AI",
         status: verified ? "installed" : "failed",
         message: verified ? (existed ? "Crawl4AI upgraded to latest" : "Crawl4AI installed successfully") : "Crawl4AI install ran but verification failed (try: pipx install crawl4ai)",
         verifyPassed: verified,
-      });
+      };
+    } catch (err) {
+      return {
+        component: "Crawl4AI",
+        status: "failed",
+        message: `Crawl4AI install failed: ${err instanceof Error ? err.message : String(err)}`,
+        verifyPassed: false,
+      };
     }
-  } catch (err) {
-    results.push({
-      component: "Crawl4AI",
-      status: "failed",
-      message: `Crawl4AI install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+  },
+  verify: async () =>
+    commandExists("crwl") ||
+    commandExists("crawl4ai-doctor") ||
+    commandExists("crawl4ai-setup"),
+};
 
-  // --- Docfork MCP ---
-  try {
-    const key = process.env.DOCFORK_API_KEY ?? "";
-    if (dryRun) {
-      log.info("[dry-run] Would register Docfork MCP config (requires DOCFORK_API_KEY)");
-      results.push({
-        component: "Docfork",
-        status: "skipped",
-        message: "[dry-run] Would register Docfork MCP server",
-        verifyPassed: false,
-      });
-    } else if (!key) {
-      results.push({
-        component: "Docfork",
-        status: "skipped",
-        message: "DOCFORK_API_KEY not set — add to ~/.config/yka-code/secrets.env and re-run",
-        verifyPassed: false,
-      });
-    } else {
-      await registerMcp("docfork", {
+const docforkSpec: ComponentSpec = {
+  id: 10,
+  name: "docfork",
+  displayName: "Docfork",
+  description: "Documentation fetching MCP server (requires DOCFORK_API_KEY)",
+  tier: "recommended",
+  category: "browser-web",
+  probe: async () => ({ present: false }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (_env, _plan, dryRun) => {
+    try {
+      const key = process.env.DOCFORK_API_KEY ?? "";
+      if (dryRun) {
+        log.info("[dry-run] Would register Docfork MCP config (requires DOCFORK_API_KEY)");
+        return {
+          component: "Docfork",
+          status: "skipped",
+          message: "[dry-run] Would register Docfork MCP server",
+          verifyPassed: false,
+        };
+      }
+      if (!key) {
+        return {
+          component: "Docfork",
+          status: "skipped",
+          message: "DOCFORK_API_KEY not set — add to ~/.config/yka-code/secrets.env and re-run",
+          verifyPassed: false,
+        };
+      }
+      const ok = await registerMcp("docfork", {
         transport: "stdio",
         command: "npx",
         args: ["-y", "docfork"],
         env: { DOCFORK_API_KEY: key },
       });
+      if (!ok) {
+        return {
+          component: "Docfork",
+          status: "failed",
+          message: "Docfork MCP registration failed — check `claude mcp list` and retry",
+          verifyPassed: false,
+        };
+      }
       log.success(`Docfork MCP server registered (DOCFORK_API_KEY found, ${key.length}-char key)`);
-      results.push({
+      return {
         component: "Docfork",
         status: "installed",
         message: `Docfork MCP registered with existing DOCFORK_API_KEY (${key.length} chars)`,
         verifyPassed: true,
-      });
-    }
-  } catch (err) {
-    results.push({
-      component: "Docfork",
-      status: "failed",
-      message: `Docfork MCP config failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
-
-  // --- DeepWiki MCP ---
-  try {
-    if (dryRun) {
-      log.info("[dry-run] Would register DeepWiki MCP config");
-      results.push({
-        component: "DeepWiki",
-        status: "skipped",
-        message: "[dry-run] Would register DeepWiki MCP server",
+      };
+    } catch (err) {
+      return {
+        component: "Docfork",
+        status: "failed",
+        message: `Docfork MCP config failed: ${err instanceof Error ? err.message : String(err)}`,
         verifyPassed: false,
-      });
-    } else {
-      await registerMcp("deepwiki", {
+      };
+    }
+  },
+  verify: async () => true,
+};
+
+const deepwikiSpec: ComponentSpec = {
+  id: 11,
+  name: "deepwiki",
+  displayName: "DeepWiki",
+  description: "Deep wiki MCP server",
+  tier: "recommended",
+  category: "browser-web",
+  probe: async () => ({ present: false }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (_env, _plan, dryRun) => {
+    try {
+      if (dryRun) {
+        log.info("[dry-run] Would register DeepWiki MCP config");
+        return {
+          component: "DeepWiki",
+          status: "skipped",
+          message: "[dry-run] Would register DeepWiki MCP server",
+          verifyPassed: false,
+        };
+      }
+      const ok = await registerMcp("deepwiki", {
         transport: "http",
         url: "https://mcp.deepwiki.com/mcp",
       });
+      if (!ok) {
+        return {
+          component: "DeepWiki",
+          status: "failed",
+          message: "DeepWiki MCP registration failed — check `claude mcp list` and retry",
+          verifyPassed: false,
+        };
+      }
       log.success("DeepWiki MCP server registered");
-      results.push({
+      return {
         component: "DeepWiki",
         status: "installed",
         message: "DeepWiki MCP config registered",
         verifyPassed: true,
-      });
+      };
+    } catch (err) {
+      return {
+        component: "DeepWiki",
+        status: "failed",
+        message: `DeepWiki MCP config failed: ${err instanceof Error ? err.message : String(err)}`,
+        verifyPassed: false,
+      };
     }
-  } catch (err) {
-    results.push({
-      component: "DeepWiki",
-      status: "failed",
-      message: `DeepWiki MCP config failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+  },
+  verify: async () => true,
+};
 
+export const browserWebSpecs: ComponentSpec[] = [playwrightSpec, crawl4aiSpec, docforkSpec, deepwikiSpec];
+
+export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
+  const results: InstallResult[] = [];
+  for (const spec of browserWebSpecs) {
+    results.push(await runComponent(spec, env, dryRun));
+  }
   return results;
 }

@@ -16,7 +16,7 @@
     "test:integration": "bun test tests/integration",
     "test:scenarios": "bun test tests/scenarios",
     "test:ci": "bats tests/ci/verify.bats",
-    "lint:hooks": "shellcheck configs/hooks/*.sh configs/project-claude/hooks/*.sh"
+    "lint:hooks": "shellcheck configs/home-claude/hooks/*.sh configs/project-claude/hooks/*.sh"
   },
   "dependencies": {
     "@clack/prompts": "^0.10",

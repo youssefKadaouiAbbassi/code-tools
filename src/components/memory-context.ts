@@ -2,7 +2,10 @@ import { $ } from "bun";
 import { promises as fs } from "fs";
 import { join } from "path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
-import { commandExists, fileExists, mergeJsonFile, registerMcp, log } from "../utils.js";
+import { commandExists, fileExists, mergeJsonFile, log } from "../utils.js";
+import { registerMcp } from "../registry/mcp.js";
+import type { ComponentSpec } from "./framework.js";
+import { runComponent } from "./framework.js";
 
 async function wireClaudeHudStatusline(env: DetectedEnvironment): Promise<{ wired: boolean; message: string }> {
   const settingsPath = join(env.claudeDir, "settings.json");
@@ -123,62 +126,76 @@ export const memoryContextCategory: ComponentCategory = {
   ],
 };
 
-export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
-  const results: InstallResult[] = [];
-
-  // --- claude-mem ---
-  // `claude-mem install --ide claude-code` self-registers its MCP server (v11+).
-  // We intentionally do NOT call registerMcp — the previous manual registration
-  // wrote stale args (`--bind 127.0.0.1`) that clobbered the installer's correct config.
-  try {
-    if (dryRun) {
-      log.info("[dry-run] Would run: npx -y claude-mem@latest install --ide claude-code");
-      results.push({
-        component: "claude-mem",
-        status: "skipped",
-        message: "[dry-run] Would install claude-mem (self-registers MCP)",
-        verifyPassed: false,
-      });
-    } else {
+const claudeMemSpec: ComponentSpec = {
+  id: 12,
+  name: "claude-mem",
+  displayName: "claude-mem",
+  description: "Persistent memory layer for Claude Code sessions",
+  tier: "recommended",
+  category: "memory-context",
+  probe: async () => ({ present: commandExists("claude-mem") }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (_env, _plan, dryRun) => {
+    try {
+      if (dryRun) {
+        log.info("[dry-run] Would run: npx -y claude-mem@latest install --ide claude-code");
+        return {
+          component: "claude-mem",
+          status: "skipped",
+          message: "[dry-run] Would install claude-mem (self-registers MCP)",
+          verifyPassed: false,
+        };
+      }
       const existed = commandExists("claude-mem");
       log.info(existed ? "Upgrading claude-mem to latest" : "Installing claude-mem");
       await $`sh -c "npx -y claude-mem@latest install --ide claude-code"`;
       log.success(existed ? "claude-mem upgraded (MCP self-registered)" : "claude-mem installed (MCP self-registered)");
-      results.push({
+      return {
         component: "claude-mem",
         status: "installed",
         message: existed ? "claude-mem upgraded to latest" : "claude-mem installed",
         verifyPassed: true,
-      });
+      };
+    } catch (err) {
+      return {
+        component: "claude-mem",
+        status: "failed",
+        message: `claude-mem install failed: ${err instanceof Error ? err.message : String(err)}`,
+        verifyPassed: false,
+      };
     }
-  } catch (err) {
-    results.push({
-      component: "claude-mem",
-      status: "failed",
-      message: `claude-mem install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+  },
+  verify: async () => commandExists("claude-mem"),
+};
 
-  // --- claude-hud (Claude Code plugin) ---
-  try {
-    if (dryRun) {
-      log.info("[dry-run] Would add jarrodwatts/claude-hud marketplace and install claude-hud plugin");
-      results.push({
-        component: "Claude HUD",
-        status: "skipped",
-        message: "[dry-run] Would install claude-hud plugin via Claude Code plugin system",
-        verifyPassed: false,
-      });
-    } else if (!commandExists("claude")) {
-      results.push({
-        component: "Claude HUD",
-        status: "skipped",
-        message: "Claude Code CLI not found — install Claude Code first, then run: claude plugin marketplace add jarrodwatts/claude-hud && claude plugin install claude-hud",
-        verifyPassed: false,
-      });
-    } else {
-      // Detect if already installed by checking the plugin registry
+const claudeHudSpec: ComponentSpec = {
+  id: 14,
+  name: "claude-hud",
+  displayName: "Claude HUD",
+  description: "Live HUD/statusline showing context, tools, agents, and todos",
+  tier: "recommended",
+  category: "memory-context",
+  probe: async () => ({ present: false }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (env, _plan, dryRun) => {
+    try {
+      if (dryRun) {
+        log.info("[dry-run] Would add jarrodwatts/claude-hud marketplace and install claude-hud plugin");
+        return {
+          component: "Claude HUD",
+          status: "skipped",
+          message: "[dry-run] Would install claude-hud plugin via Claude Code plugin system",
+          verifyPassed: false,
+        };
+      }
+      if (!commandExists("claude")) {
+        return {
+          component: "Claude HUD",
+          status: "skipped",
+          message: "Claude Code CLI not found — install Claude Code first, then run: claude plugin marketplace add jarrodwatts/claude-hud && claude plugin install claude-hud",
+          verifyPassed: false,
+        };
+      }
       const registryPath = join(env.claudeDir, "plugins", "installed_plugins.json");
       let alreadyInstalled = false;
       try {
@@ -188,87 +205,112 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
 
       if (alreadyInstalled) {
         const wireResult = await wireClaudeHudStatusline(env);
-        results.push({
+        return {
           component: "Claude HUD",
           status: "already-installed",
           message: wireResult.wired
             ? `Claude HUD plugin already installed; ${wireResult.message}`
             : `Claude HUD plugin already installed (${wireResult.message})`,
           verifyPassed: true,
-        });
-      } else {
-        const mkt = await $`claude plugin marketplace add jarrodwatts/claude-hud`.nothrow();
-        if (mkt.exitCode !== 0) {
-          results.push({
-            component: "Claude HUD",
-            status: "failed",
-            message: `claude plugin marketplace add exited ${mkt.exitCode}: ${mkt.stderr.toString().slice(0, 200)}`,
-            verifyPassed: false,
-          });
-        } else {
-          const install = await $`claude plugin install claude-hud`.nothrow();
-          if (install.exitCode !== 0) {
-            results.push({
-              component: "Claude HUD",
-              status: "failed",
-              message: `claude plugin install exited ${install.exitCode}: ${install.stderr.toString().slice(0, 200)}`,
-              verifyPassed: false,
-            });
-          } else {
-            const wire = await wireClaudeHudStatusline(env);
-            results.push({
-              component: "Claude HUD",
-              status: "installed",
-              message: wire.wired
-                ? `Claude HUD installed, statusline wired — restart Claude Code`
-                : `Claude HUD installed — restart Claude Code (${wire.message})`,
-              verifyPassed: wire.wired,
-            });
-          }
-        }
+        };
       }
-    }
-  } catch (err) {
-    results.push({
-      component: "Claude HUD",
-      status: "failed",
-      message: `Claude HUD install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
-
-  // --- context-mode MCP ---
-  try {
-    if (dryRun) {
-      log.info("[dry-run] Would register context-mode MCP config");
-      results.push({
-        component: "context-mode",
-        status: "skipped",
-        message: "[dry-run] Would register context-mode MCP server",
+      const mkt = await $`claude plugin marketplace add jarrodwatts/claude-hud`.nothrow();
+      if (mkt.exitCode !== 0) {
+        return {
+          component: "Claude HUD",
+          status: "failed",
+          message: `claude plugin marketplace add exited ${mkt.exitCode}: ${mkt.stderr.toString().slice(0, 200)}`,
+          verifyPassed: false,
+        };
+      }
+      const out = await $`claude plugin install claude-hud`.nothrow();
+      if (out.exitCode !== 0) {
+        return {
+          component: "Claude HUD",
+          status: "failed",
+          message: `claude plugin install exited ${out.exitCode}: ${out.stderr.toString().slice(0, 200)}`,
+          verifyPassed: false,
+        };
+      }
+      const wire = await wireClaudeHudStatusline(env);
+      return {
+        component: "Claude HUD",
+        status: "installed",
+        message: wire.wired
+          ? `Claude HUD installed, statusline wired — restart Claude Code`
+          : `Claude HUD installed — restart Claude Code (${wire.message})`,
+        verifyPassed: wire.wired,
+      };
+    } catch (err) {
+      return {
+        component: "Claude HUD",
+        status: "failed",
+        message: `Claude HUD install failed: ${err instanceof Error ? err.message : String(err)}`,
         verifyPassed: false,
-      });
-    } else {
-      await registerMcp("context-mode", {
+      };
+    }
+  },
+  verify: async () => true,
+};
+
+const contextModeSpec: ComponentSpec = {
+  id: 13,
+  name: "context-mode",
+  displayName: "context-mode",
+  description: "Context switching MCP server for Claude",
+  tier: "recommended",
+  category: "memory-context",
+  probe: async () => ({ present: false }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (_env, _plan, dryRun) => {
+    try {
+      if (dryRun) {
+        log.info("[dry-run] Would register context-mode MCP config");
+        return {
+          component: "context-mode",
+          status: "skipped",
+          message: "[dry-run] Would register context-mode MCP server",
+          verifyPassed: false,
+        };
+      }
+      const ok = await registerMcp("context-mode", {
         transport: "stdio",
         command: "npx",
         args: ["-y", "context-mode"],
       });
+      if (!ok) {
+        return {
+          component: "context-mode",
+          status: "failed",
+          message: "context-mode MCP registration failed — check `claude mcp list` and retry",
+          verifyPassed: false,
+        };
+      }
       log.success("context-mode MCP server registered");
-      results.push({
+      return {
         component: "context-mode",
         status: "installed",
         message: "context-mode MCP config registered",
         verifyPassed: true,
-      });
+      };
+    } catch (err) {
+      return {
+        component: "context-mode",
+        status: "failed",
+        message: `context-mode MCP config failed: ${err instanceof Error ? err.message : String(err)}`,
+        verifyPassed: false,
+      };
     }
-  } catch (err) {
-    results.push({
-      component: "context-mode",
-      status: "failed",
-      message: `context-mode MCP config failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+  },
+  verify: async () => true,
+};
 
+export const memoryContextSpecs: ComponentSpec[] = [claudeMemSpec, claudeHudSpec, contextModeSpec];
+
+export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
+  const results: InstallResult[] = [];
+  for (const spec of memoryContextSpecs) {
+    results.push(await runComponent(spec, env, dryRun));
+  }
   return results;
 }

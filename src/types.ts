@@ -88,6 +88,10 @@ export interface MCPServerConfig {
   env?: Record<string, string>;
 }
 
+export type McpSpec =
+  | { transport: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
+  | { transport: 'http' | 'sse'; url: string; headers?: Record<string, string> };
+
 // Config deployment
 export interface ConfigDeployment {
   sourcePath: string;   // relative to configs/ dir

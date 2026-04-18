@@ -1,30 +1,22 @@
 import { $ } from "bun";
 import { join } from "node:path";
 import { symlink } from "node:fs/promises";
-import type { DetectedEnvironment, InstallPackage, InstallResult } from "./types.js";
+import type { DetectedEnvironment, InstallResult } from "./types.js";
 import {
   copyFile,
-  copyDir,
   ensureDir,
   mergeJsonFile,
   appendToShellRc,
-  installBinary,
   getConfigsDir,
   fileExists,
   log,
 } from "./utils.js";
+import { installBinary, DEV_CLI_PACKAGES } from "./packages.js";
 import { createBackup, restoreFromPartialManifest } from "./backup.js";
 import { resolveWrite, resolveMerge, type DeployMode } from "./add-on-top.js";
 import { buildHooksConfig } from "./hook-registry.js";
-
-export function isLocalScope(env: DetectedEnvironment): boolean {
-  const home = env.homeDir.replace(/\/+$/, "");
-  return !env.claudeDir.startsWith(home + "/");
-}
-
-export function templateDir(env: DetectedEnvironment): "home-claude" | "project-claude" {
-  return isLocalScope(env) ? "project-claude" : "home-claude";
-}
+import { isLocalScope, templateDir } from "./scope.js";
+import { deployManagedDirectory, type DeployKind } from "./deploy.js";
 
 async function deploySettings(env: DetectedEnvironment, dryRun: boolean, deployMode?: DeployMode): Promise<InstallResult> {
   const component = "claude-settings";
@@ -94,241 +86,66 @@ async function deployClaudeMd(env: DetectedEnvironment, dryRun: boolean, deployM
 }
 
 const MANIFEST_NAME = ".yka-code-managed.json";
-const MANIFEST_VERSION = 1;
 
-type DeployManifest = { version?: number; entries: string[] };
+type ManagedTreeSpec = {
+  component: string;
+  kind: DeployKind;
+  dir: string;
+  entryKind: "directory" | "file";
+  glob: string;
+};
 
-async function readManifest(path: string): Promise<string[]> {
-  try {
-    const data = JSON.parse(await Bun.file(path).text()) as DeployManifest;
-    return Array.isArray(data.entries) ? data.entries : [];
-  } catch {
-    return [];
-  }
+const MANAGED_TREES: ManagedTreeSpec[] = [
+  { component: "orchestration-skills", kind: "skills", dir: "skills", entryKind: "directory", glob: "*/SKILL.md" },
+  { component: "user-commands", kind: "commands", dir: "commands", entryKind: "file", glob: "*.md" },
+  { component: "user-agents", kind: "agents", dir: "agents", entryKind: "file", glob: "*.md" },
+];
+
+function deployManagedTree(
+  spec: ManagedTreeSpec,
+  env: DetectedEnvironment,
+  dryRun: boolean,
+  deployMode?: DeployMode,
+): Promise<InstallResult> {
+  const dst = join(env.claudeDir, spec.dir);
+  return deployManagedDirectory({
+    component: spec.component,
+    src: join(getConfigsDir(), "..", spec.dir),
+    dst,
+    manifestPath: join(dst, MANIFEST_NAME),
+    kind: spec.kind,
+    entryKind: spec.entryKind,
+    glob: spec.glob,
+    deployMode,
+    dryRun,
+  });
 }
 
-async function writeManifest(path: string, entries: string[]): Promise<void> {
-  await Bun.write(path, JSON.stringify({ version: MANIFEST_VERSION, entries: entries.sort() }, null, 2) + "\n");
-}
-
-async function deploySkills(env: DetectedEnvironment, dryRun: boolean, deployMode?: DeployMode): Promise<InstallResult> {
-  const component = "orchestration-skills";
-  const src = join(getConfigsDir(), "..", "skills");
-  const dst = join(env.claudeDir, "skills");
-  const manifestPath = join(dst, MANIFEST_NAME);
-
-  const skillDirs = await Array.fromAsync(new Bun.Glob("*/SKILL.md").scan({ cwd: src, onlyFiles: true }));
-  const current = [...new Set(skillDirs.map((rel) => rel.split("/")[0]))];
-  const previous = await readManifest(manifestPath);
-  const stale = previous.filter((name) => !current.includes(name));
-
-  if (dryRun) {
-    log.info(`[dry-run] Would deploy ${current.length} skills from ${src} to ${dst}`);
-    if (stale.length > 0) log.info(`[dry-run] Would remove ${stale.length} stale skill(s): ${stale.join(", ")}`);
-    return { component, status: "skipped", message: `[dry-run] Would deploy ${current.length} skills, remove ${stale.length} stale`, verifyPassed: false };
-  }
-
-  try {
-    await ensureDir(dst);
-
-    for (const name of stale) {
-      await $`rm -rf ${join(dst, name)}`.quiet();
-    }
-
-    const previousSet = new Set(previous);
-    let skipped = 0;
-    for (const name of current) {
-      const skillDst = join(dst, name);
-      if (!previousSet.has(name) && await resolveWrite(skillDst, deployMode) === "skip") {
-        skipped++;
-        continue;
-      }
-      await $`rm -rf ${skillDst}`.quiet();
-      await copyDir(join(src, name), skillDst);
-    }
-
-    await writeManifest(manifestPath, current.filter((n) => previousSet.has(n) || skipped === 0));
-
-    const removedMsg = stale.length > 0 ? `, removed ${stale.length} stale (${stale.join(", ")})` : "";
-    const skipMsg = skipped > 0 ? `, skipped ${skipped} (user-owned collision)` : "";
-    log.success(`Deployed ${current.length - skipped} skill(s) to ${dst}${removedMsg}${skipMsg}`);
-    return { component, status: "installed", message: `${current.length - skipped} skills deployed${removedMsg}${skipMsg}`, verifyPassed: true };
-  } catch (err) {
-    return {
-      component,
-      status: "failed",
-      message: `Failed to deploy skills: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    };
-  }
-}
-
-async function deployCommands(env: DetectedEnvironment, dryRun: boolean, deployMode?: DeployMode): Promise<InstallResult> {
-  const component = "user-commands";
-  const src = join(getConfigsDir(), "..", "commands");
-  const dst = join(env.claudeDir, "commands");
-  const manifestPath = join(dst, MANIFEST_NAME);
-
-  const files = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: src, onlyFiles: true }));
-  const current = [...files];
-  const previous = await readManifest(manifestPath);
-  const stale = previous.filter((name) => !current.includes(name));
-
-  if (dryRun) {
-    log.info(`[dry-run] Would deploy ${current.length} command(s) from ${src} to ${dst}`);
-    if (stale.length > 0) log.info(`[dry-run] Would remove ${stale.length} stale command(s): ${stale.join(", ")}`);
-    return { component, status: "skipped", message: `[dry-run] Would deploy ${current.length} commands, remove ${stale.length} stale`, verifyPassed: false };
-  }
-
-  try {
-    await ensureDir(dst);
-
-    for (const name of stale) {
-      await $`rm -f ${join(dst, name)}`.quiet();
-    }
-
-    const previousSet = new Set(previous);
-    let skipped = 0;
-    for (const name of current) {
-      const target = join(dst, name);
-      if (!previousSet.has(name) && await resolveWrite(target, deployMode) === "skip") {
-        skipped++;
-        continue;
-      }
-      await copyFile(join(src, name), target);
-    }
-
-    await writeManifest(manifestPath, current);
-
-    const removedMsg = stale.length > 0 ? `, removed ${stale.length} stale (${stale.join(", ")})` : "";
-    const skipMsg = skipped > 0 ? `, skipped ${skipped} (user-owned collision)` : "";
-    log.success(`Deployed ${current.length - skipped} slash command(s) to ${dst}${removedMsg}${skipMsg}`);
-    return { component, status: "installed", message: `${current.length - skipped} user commands deployed${removedMsg}${skipMsg}`, verifyPassed: true };
-  } catch (err) {
-    return {
-      component,
-      status: "failed",
-      message: `Failed to deploy commands: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    };
-  }
-}
-
-async function deployAgents(env: DetectedEnvironment, dryRun: boolean, deployMode?: DeployMode): Promise<InstallResult> {
-  const component = "user-agents";
-  const src = join(getConfigsDir(), "..", "agents");
-  const dst = join(env.claudeDir, "agents");
-  const manifestPath = join(dst, MANIFEST_NAME);
-
-  const files = await Array.fromAsync(new Bun.Glob("*.md").scan({ cwd: src, onlyFiles: true }));
-  const current = files.filter((f) => f.toUpperCase() !== "AGENTS.md");
-  const previous = await readManifest(manifestPath);
-  const stale = previous.filter((name) => !current.includes(name));
-
-  if (dryRun) {
-    log.info(`[dry-run] Would deploy ${current.length} agent(s) from ${src} to ${dst}`);
-    if (stale.length > 0) log.info(`[dry-run] Would remove ${stale.length} stale agent(s): ${stale.join(", ")}`);
-    return { component, status: "skipped", message: `[dry-run] Would deploy ${current.length} agents, remove ${stale.length} stale`, verifyPassed: false };
-  }
-
-  try {
-    await ensureDir(dst);
-
-    for (const name of stale) {
-      await $`rm -f ${join(dst, name)}`.quiet();
-    }
-
-    const previousSet = new Set(previous);
-    let skipped = 0;
-    for (const name of current) {
-      const target = join(dst, name);
-      if (!previousSet.has(name) && await resolveWrite(target, deployMode) === "skip") {
-        skipped++;
-        continue;
-      }
-      await copyFile(join(src, name), target);
-    }
-
-    await writeManifest(manifestPath, current);
-
-    const removedMsg = stale.length > 0 ? `, removed ${stale.length} stale (${stale.join(", ")})` : "";
-    const skipMsg = skipped > 0 ? `, skipped ${skipped} (user-owned collision)` : "";
-    log.success(`Deployed ${current.length - skipped} subagent(s) to ${dst}${removedMsg}${skipMsg}`);
-    return { component, status: "installed", message: `${current.length - skipped} user agents deployed${removedMsg}${skipMsg}`, verifyPassed: true };
-  } catch (err) {
-    return {
-      component,
-      status: "failed",
-      message: `Failed to deploy agents: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    };
-  }
-}
-
-async function deployHooks(env: DetectedEnvironment, dryRun: boolean, deployMode?: DeployMode): Promise<InstallResult> {
-  const component = "claude-hooks";
-  const hooksSourceDir = isLocalScope(env)
-    ? join(getConfigsDir(), "project-claude", "hooks")
-    : join(getConfigsDir(), "hooks");
-  const hooksTargetDir = join(env.claudeDir, "hooks");
-  const manifestPath = join(hooksTargetDir, MANIFEST_NAME);
-
-  const hookFiles = await Array.fromAsync(
-    new Bun.Glob("*.{sh,js,ts,py}").scan({ cwd: hooksSourceDir, onlyFiles: true })
-  );
-  const previous = await readManifest(manifestPath);
-  const stale = previous.filter((name) => !hookFiles.includes(name));
-
-  if (dryRun) {
-    log.info(`[dry-run] Would deploy ${hookFiles.length} hook(s) to ${hooksTargetDir} with chmod 755`);
-    if (stale.length > 0) log.info(`[dry-run] Would remove ${stale.length} stale hook(s): ${stale.join(", ")}`);
-    return { component, status: "skipped", message: `[dry-run] Would deploy ${hookFiles.length} hooks, remove ${stale.length} stale`, verifyPassed: false };
-  }
-
-  try {
-    await ensureDir(hooksTargetDir);
-
-    for (const name of stale) {
-      await $`rm -f ${join(hooksTargetDir, name)}`.quiet();
-    }
-
-    const previousHookSet = new Set(previous);
-    let skippedHooks = 0;
-    for (const hookFile of hookFiles) {
-      const src = join(hooksSourceDir, hookFile);
-      const dest = join(hooksTargetDir, hookFile);
-      if (!previousHookSet.has(hookFile) && await resolveWrite(dest, deployMode) === "skip") {
-        skippedHooks++;
-        continue;
-      }
-      await copyFile(src, dest);
-      await $`chmod 755 ${dest}`.quiet();
-    }
-    await $`chmod 755 ${hooksTargetDir}`.quiet();
-    await writeManifest(manifestPath, hookFiles);
-
-    const settingsPath = join(env.claudeDir, "settings.json");
-    const hookFilenames = new Set(hookFiles);
-
-    const hooksConfig = buildHooksConfig(
-      (file) => ({ type: "command", command: join(hooksTargetDir, file) }),
-      { filter: (file) => hookFilenames.has(file) },
-    );
-
-    await resolveMerge(settingsPath, ["hooks"], deployMode);
-    await mergeJsonFile(settingsPath, { hooks: hooksConfig });
-
-    const skipMsg = skippedHooks > 0 ? `, skipped ${skippedHooks} (user-owned collision)` : "";
-    log.success(`Deployed ${hookFiles.length - skippedHooks} hook scripts and wired them into settings.json${skipMsg}`);
-    return { component, status: "installed", message: `${hookFiles.length - skippedHooks} hook scripts deployed and wired${skipMsg}`, verifyPassed: true };
-  } catch (error) {
-    return {
-      component,
-      status: "failed",
-      message: `Failed to deploy hooks: ${error instanceof Error ? error.message : String(error)}`,
-      verifyPassed: false,
-    };
-  }
+function deployHooks(env: DetectedEnvironment, dryRun: boolean, deployMode?: DeployMode): Promise<InstallResult> {
+  const dst = join(env.claudeDir, "hooks");
+  return deployManagedDirectory({
+    component: "claude-hooks",
+    src: join(getConfigsDir(), templateDir(env), "hooks"),
+    dst,
+    manifestPath: join(dst, MANIFEST_NAME),
+    kind: "hooks",
+    entryKind: "file",
+    glob: "*.{sh,js,ts,py}",
+    deployMode,
+    dryRun,
+    onCopyEntry: async (target) => { await $`chmod 755 ${target}`.quiet(); },
+    onDeployComplete: async ({ dstDir, deployed }) => {
+      await $`chmod 755 ${dstDir}`.quiet();
+      const settingsPath = join(env.claudeDir, "settings.json");
+      const deployedSet = new Set(deployed);
+      const hooksConfig = buildHooksConfig(
+        (file) => ({ type: "command", command: join(dstDir, file) }),
+        { filter: (file) => deployedSet.has(file) },
+      );
+      await resolveMerge(settingsPath, ["hooks"], deployMode);
+      await mergeJsonFile(settingsPath, { hooks: hooksConfig });
+    },
+  });
 }
 
 async function installJq(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {
@@ -478,128 +295,6 @@ async function installJust(env: DetectedEnvironment, dryRun: boolean): Promise<I
   );
 }
 
-const LAZYGIT_CURL =
-  "set -e; " +
-  "ARCH=$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/'); " +
-  "OS=$(uname -s | tr A-Z a-z | sed 's/darwin/Darwin/;s/linux/Linux/'); " +
-  "LAZY_VER=$(curl --connect-timeout 15 --max-time 30 -sS https://api.github.com/repos/jesseduffield/lazygit/releases/latest | grep tag_name | head -1 | sed 's/.*\"v\\([^\"]*\\)\".*/\\1/'); " +
-  "URL=\"https://github.com/jesseduffield/lazygit/releases/download/v${LAZY_VER}/lazygit_${LAZY_VER}_${OS}_${ARCH}.tar.gz\"; " +
-  "mkdir -p \"$HOME/.local/bin\"; TMP=$(mktemp -d); " +
-  "curl --connect-timeout 15 --max-time 300 -sSL \"$URL\" | tar -xz -C \"$TMP\"; " +
-  "mv \"$TMP/lazygit\" \"$HOME/.local/bin/lazygit\"; chmod +x \"$HOME/.local/bin/lazygit\"; rm -rf \"$TMP\"";
-
-// Current 2026 AI-dev baseline CLIs. Ordered for fail-fast visibility: most-essential first.
-const DEV_CLI_PACKAGES: InstallPackage[] = [
-  {
-    name: "rg",
-    displayName: "ripgrep",
-    brew: "brew install ripgrep",
-    apt: "sudo apt-get install -y ripgrep",
-    pacman: "sudo pacman -S --noconfirm ripgrep",
-    dnf: "sudo dnf install -y ripgrep",
-    cargo: "cargo install ripgrep --locked",
-  },
-  {
-    name: "fd",
-    displayName: "fd",
-    brew: "brew install fd",
-    apt: "sudo apt-get install -y fd-find && mkdir -p \"$HOME/.local/bin\" && ln -sf \"$(command -v fdfind)\" \"$HOME/.local/bin/fd\"",
-    pacman: "sudo pacman -S --noconfirm fd",
-    dnf: "sudo dnf install -y fd-find",
-    cargo: "cargo install fd-find --locked",
-  },
-  {
-    name: "fzf",
-    displayName: "fzf",
-    brew: "brew install fzf",
-    apt: "sudo apt-get install -y fzf",
-    pacman: "sudo pacman -S --noconfirm fzf",
-    dnf: "sudo dnf install -y fzf",
-    curl: "git clone --depth 1 https://github.com/junegunn/fzf.git \"$HOME/.fzf\" && \"$HOME/.fzf/install\" --bin --no-update-rc && mkdir -p \"$HOME/.local/bin\" && ln -sf \"$HOME/.fzf/bin/fzf\" \"$HOME/.local/bin/fzf\"",
-  },
-  {
-    name: "bat",
-    displayName: "bat",
-    brew: "brew install bat",
-    apt: "sudo apt-get install -y bat && mkdir -p \"$HOME/.local/bin\" && ln -sf \"$(command -v batcat)\" \"$HOME/.local/bin/bat\"",
-    pacman: "sudo pacman -S --noconfirm bat",
-    dnf: "sudo dnf install -y bat",
-    cargo: "cargo install bat --locked",
-  },
-  {
-    name: "delta",
-    displayName: "delta",
-    brew: "brew install git-delta",
-    pacman: "sudo pacman -S --noconfirm git-delta",
-    cargo: "cargo install git-delta --locked",
-  },
-  {
-    name: "jaq",
-    displayName: "jaq",
-    brew: "brew install jaq",
-    pacman: "sudo pacman -S --noconfirm jaq",
-    cargo: "cargo install jaq --locked",
-  },
-  {
-    name: "zoxide",
-    displayName: "zoxide",
-    brew: "brew install zoxide",
-    apt: "sudo apt-get install -y zoxide",
-    pacman: "sudo pacman -S --noconfirm zoxide",
-    dnf: "sudo dnf install -y zoxide",
-    curl: "curl --connect-timeout 15 --max-time 120 -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh",
-  },
-  {
-    name: "lazygit",
-    displayName: "lazygit",
-    brew: "brew install lazygit",
-    pacman: "sudo pacman -S --noconfirm lazygit",
-    dnf: "sudo dnf copr enable -y atim/lazygit && sudo dnf install -y lazygit",
-    curl: LAZYGIT_CURL,
-  },
-  {
-    name: "uv",
-    displayName: "uv",
-    brew: "brew install uv",
-    curl: "curl --connect-timeout 15 --max-time 300 -LsSf https://astral.sh/uv/install.sh | sh",
-  },
-  {
-    name: "bun",
-    displayName: "bun",
-    brew: "brew install oven-sh/bun/bun",
-    curl: "curl --connect-timeout 15 --max-time 300 -fsSL https://bun.sh/install | bash",
-  },
-  {
-    name: "sops",
-    displayName: "sops",
-    brew: "brew install sops",
-    apt: "sudo apt-get install -y sops",
-    pacman: "sudo pacman -S --noconfirm sops",
-    dnf: "sudo dnf install -y sops",
-    curl:
-      "set -e; ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/'); " +
-      "OS=$(uname -s | tr A-Z a-z); " +
-      "VER=$(curl --connect-timeout 15 --max-time 30 -sS https://api.github.com/repos/getsops/sops/releases/latest | grep tag_name | head -1 | sed 's/.*\"\\(v[^\"]*\\)\".*/\\1/'); " +
-      "mkdir -p \"$HOME/.local/bin\"; " +
-      "curl --connect-timeout 15 --max-time 300 -sSL \"https://github.com/getsops/sops/releases/download/${VER}/sops-${VER}.${OS}.${ARCH}\" -o \"$HOME/.local/bin/sops\"; " +
-      "chmod +x \"$HOME/.local/bin/sops\"",
-  },
-  {
-    name: "gitleaks",
-    displayName: "gitleaks",
-    brew: "brew install gitleaks",
-    pacman: "sudo pacman -S --noconfirm gitleaks",
-    dnf: "sudo dnf install -y gitleaks",
-    curl:
-      "set -e; ARCH=$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/'); " +
-      "OS=$(uname -s | tr A-Z a-z); " +
-      "VER=$(curl --connect-timeout 15 --max-time 30 -sS https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep tag_name | head -1 | sed 's/.*\"v\\([^\"]*\\)\".*/\\1/'); " +
-      "mkdir -p \"$HOME/.local/bin\"; TMP=$(mktemp -d); " +
-      "curl --connect-timeout 15 --max-time 300 -sSL \"https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_${OS}_${ARCH}.tar.gz\" | tar -xz -C \"$TMP\"; " +
-      "mv \"$TMP/gitleaks\" \"$HOME/.local/bin/gitleaks\"; chmod +x \"$HOME/.local/bin/gitleaks\"; rm -rf \"$TMP\"",
-  },
-];
-
 async function installDevCliBaseline(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
   const results: InstallResult[] = [];
   for (const pkg of DEV_CLI_PACKAGES) {
@@ -645,18 +340,17 @@ async function enableTelemetry(env: DetectedEnvironment, dryRun: boolean): Promi
   const lines = [
     "export CLAUDE_CODE_ENABLE_TELEMETRY=1",
     "export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1",
-    "export CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1",
   ];
 
   if (dryRun) {
     log.info(`[dry-run] Would append Claude Code env vars to ${env.shellRcPath}`);
-    return { component, status: "skipped", message: `[dry-run] Would set Claude Code env vars (telemetry, agent teams, subprocess env scrub)`, verifyPassed: false };
+    return { component, status: "skipped", message: `[dry-run] Would set Claude Code env vars (telemetry, agent teams)`, verifyPassed: false };
   }
 
   try {
     await appendToShellRc(env, lines, "claude-code-env");
     log.success(`Claude Code env vars added to ${env.shellRcPath}`);
-    return { component, status: "installed", message: `Telemetry + agent-teams + subprocess-env-scrub env vars added`, verifyPassed: true };
+    return { component, status: "installed", message: `Telemetry + agent-teams env vars added`, verifyPassed: true };
   } catch (error) {
     return {
       component,
@@ -745,9 +439,9 @@ export async function installCore(
     results.push(await deployClaudeMd(env, dryRun, deployMode));
     results.push(await deployHooks(env, dryRun, deployMode));
     if (!local) {
-      results.push(await deploySkills(env, dryRun, deployMode));
-      results.push(await deployCommands(env, dryRun, deployMode));
-      results.push(await deployAgents(env, dryRun, deployMode));
+      for (const spec of MANAGED_TREES) {
+        results.push(await deployManagedTree(spec, env, dryRun, deployMode));
+      }
       results.push(await installJq(env, dryRun));
       results.push(await installTmux(env, dryRun));
       results.push(await installStarship(env, dryRun));

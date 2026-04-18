@@ -1,165 +1,155 @@
 import { $ } from "bun";
-import { promises as fs } from "node:fs";
-import { join } from "node:path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, log } from "../utils.js";
+import { CORE_PLUGINS } from "../packages.js";
+import type { ComponentSpec } from "./framework.js";
+import { runComponent } from "./framework.js";
+import { ensureMarketplace, installPlugin, listInstalledPlugins } from "../registry/plugins.js";
 
 const MARKETPLACE_SLUG = "anthropics/claude-plugins-official";
 const MARKETPLACE_NAME = "claude-plugins-official";
-
-const EXTRA_MARKETPLACES: Array<{ slug: string; marketplaceName: string; plugins: string[] }> = [
-  { slug: "obra/superpowers-marketplace", marketplaceName: "superpowers-marketplace", plugins: [] },
-];
-
-export const CORE_PLUGINS = [
-  "feature-dev",
-  "code-review",
-  "pr-review-toolkit",
-  "commit-commands",
-  "claude-code-setup",
-  "claude-md-management",
-  "frontend-design",
-  "skill-creator",
-  "session-report",
-  "plugin-dev",
-];
-
-// Per-language LSP plugins in the marketplace are README-only (no plugin.json,
-// no install logic); we install the real binaries ourselves via installRealLspBinaries.
-const LSP_PLUGINS: string[] = [];
-
-const ALL_PLUGINS = [...CORE_PLUGINS, ...LSP_PLUGINS];
-const EXTRA_PLUGIN_NAMES = EXTRA_MARKETPLACES.flatMap((m) => m.plugins);
-const TOTAL_PLUGIN_COUNT = ALL_PLUGINS.length + EXTRA_PLUGIN_NAMES.length;
 
 export const ccPluginsCategory: ComponentCategory = {
   id: "cc-plugins",
   name: "Claude Code Plugins",
   tier: "recommended",
-  description: `${TOTAL_PLUGIN_COUNT} curated Anthropic-official plugins (feature-dev, code-review, pr-review-toolkit, session-report, plugin-dev, etc.) + stack-matched LSP binaries`,
+  description: `${CORE_PLUGINS.length} curated Anthropic-official plugins (feature-dev, code-review, pr-review-toolkit, session-report, plugin-dev, etc.) + stack-matched LSP binaries`,
   defaultEnabled: true,
-  components: [
-    ...ALL_PLUGINS.map((name, i) => ({
-      id: 200 + i,
-      name,
-      displayName: name,
-      description: `Anthropic-maintained plugin: ${name}`,
-      tier: "recommended" as const,
-      category: "cc-plugins",
-      packages: [],
-      verifyCommand: "claude plugin list",
-    })),
-    ...EXTRA_PLUGIN_NAMES.map((name, i) => ({
-      id: 200 + ALL_PLUGINS.length + i,
-      name,
-      displayName: name,
-      description: `Community plugin (${EXTRA_MARKETPLACES.find((m) => m.plugins.includes(name))?.slug}): ${name}`,
-      tier: "recommended" as const,
-      category: "cc-plugins",
-      packages: [],
-      verifyCommand: "claude plugin list",
-    })),
-  ],
+  components: CORE_PLUGINS.map((name, i) => ({
+    id: 200 + i,
+    name,
+    displayName: name,
+    description: `Anthropic-maintained plugin: ${name}`,
+    tier: "recommended" as const,
+    category: "cc-plugins",
+    packages: [],
+    verifyCommand: "claude plugin list",
+  })),
 };
 
-async function loadInstalledPlugins(env: DetectedEnvironment): Promise<Set<string>> {
-  const path = join(env.claudeDir, "plugins", "installed_plugins.json");
-  try {
-    const data = JSON.parse(await fs.readFile(path, "utf-8")) as { plugins?: Record<string, unknown> };
-    // Keys look like "feature-dev@claude-plugins-official"
-    return new Set(Object.keys(data.plugins ?? {}));
-  } catch {
-    return new Set();
-  }
-}
-
-async function installRealLspBinaries(_env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
-  const out: InstallResult[] = [];
-
-  const targets: Array<{ name: string; needs: () => boolean; install: string; verify: string }> = [
-    {
-      name: "typescript-language-server",
-      needs: () => commandExists("npm") && (commandExists("node") || commandExists("bun")),
-      install: "npm install -g typescript-language-server typescript",
-      verify: "typescript-language-server",
-    },
-    {
-      name: "pyright (Python LSP)",
-      needs: () => commandExists("npm") && commandExists("python3"),
-      install: "npm install -g pyright",
-      verify: "pyright",
-    },
-    {
-      name: "rust-analyzer",
-      needs: () => commandExists("rustup") && !commandExists("rust-analyzer"),
-      install: "rustup component add rust-analyzer",
-      verify: "rust-analyzer",
-    },
-    {
-      name: "gopls",
-      needs: () => commandExists("go") && !commandExists("gopls"),
-      install: "go install golang.org/x/tools/gopls@latest",
-      verify: "gopls",
-    },
-  ];
-
-  for (const t of targets) {
-    if (!t.needs()) {
-      out.push({
-        component: t.name,
-        status: "skipped",
-        message: `runtime not present — skipping (install the runtime first, then re-run setup)`,
-        verifyPassed: false,
-      });
-      continue;
-    }
-    if (commandExists(t.verify)) {
-      out.push({
-        component: t.name,
-        status: "already-installed",
-        message: `${t.verify} already on disk`,
-        verifyPassed: true,
-      });
-      continue;
-    }
-    if (dryRun) {
-      out.push({
-        component: t.name,
-        status: "skipped",
-        message: `[dry-run] Would run: ${t.install}`,
-        verifyPassed: false,
-      });
-      continue;
-    }
-    log.info(`Installing ${t.name}: ${t.install}`);
-    const r = await $`sh -c ${t.install}`.nothrow();
-    const ok = commandExists(t.verify);
-    out.push({
+async function installLspBinary(t: { name: string; needs: () => boolean; install: string; verify: string }, dryRun: boolean): Promise<InstallResult> {
+  if (!t.needs()) {
+    return {
       component: t.name,
-      status: ok ? "installed" : "failed",
-      message: ok ? `${t.verify} installed` : `install exited ${r.exitCode}; binary not found`,
-      verifyPassed: ok,
-    });
+      status: "skipped",
+      message: `runtime not present — skipping (install the runtime first, then re-run setup)`,
+      verifyPassed: false,
+    };
   }
-
-  return out;
+  if (commandExists(t.verify)) {
+    return {
+      component: t.name,
+      status: "already-installed",
+      message: `${t.verify} already on disk`,
+      verifyPassed: true,
+    };
+  }
+  if (dryRun) {
+    return {
+      component: t.name,
+      status: "skipped",
+      message: `[dry-run] Would run: ${t.install}`,
+      verifyPassed: false,
+    };
+  }
+  log.info(`Installing ${t.name}: ${t.install}`);
+  const r = await $`sh -c ${t.install}`.nothrow();
+  const ok = commandExists(t.verify);
+  return {
+    component: t.name,
+    status: ok ? "installed" : "failed",
+    message: ok ? `${t.verify} installed` : `install exited ${r.exitCode}; binary not found`,
+    verifyPassed: ok,
+  };
 }
 
-async function marketplaceRegistered(env: DetectedEnvironment): Promise<boolean> {
-  const path = join(env.claudeDir, "plugins", "known_marketplaces.json");
-  try {
-    const text = await fs.readFile(path, "utf-8");
-    return text.includes("claude-plugins-official");
-  } catch {
-    return false;
-  }
+const LSP_TARGETS: Array<{ name: string; needs: () => boolean; install: string; verify: string }> = [
+  {
+    name: "typescript-language-server",
+    needs: () => commandExists("npm") && (commandExists("node") || commandExists("bun")),
+    install: "npm install -g typescript-language-server typescript",
+    verify: "typescript-language-server",
+  },
+  {
+    name: "pyright (Python LSP)",
+    needs: () => commandExists("npm") && commandExists("python3"),
+    install: "npm install -g pyright",
+    verify: "pyright",
+  },
+  {
+    name: "rust-analyzer",
+    needs: () => commandExists("rustup") && !commandExists("rust-analyzer"),
+    install: "rustup component add rust-analyzer",
+    verify: "rust-analyzer",
+  },
+  {
+    name: "gopls",
+    needs: () => commandExists("go") && !commandExists("gopls"),
+    install: "go install golang.org/x/tools/gopls@latest",
+    verify: "gopls",
+  },
+];
+
+function pluginSpec(id: number, name: string, slug: string, marketplaceName: string): ComponentSpec {
+  const key = `${name}@${marketplaceName}`;
+  return {
+    id,
+    name,
+    displayName: name,
+    description: `Claude Code plugin: ${key}`,
+    tier: "recommended",
+    category: "cc-plugins",
+    probe: async (env) => ({ present: (await listInstalledPlugins(env)).has(key) }),
+    plan: () => ({ kind: "install", steps: [] }),
+    install: async (env, _plan, dryRun) => {
+      if (!commandExists("claude") && !dryRun) {
+        return {
+          component: name,
+          status: "skipped",
+          message: "Claude Code CLI not found — install Claude Code first",
+          verifyPassed: false,
+        };
+      }
+      if (dryRun) {
+        return {
+          component: name,
+          status: "skipped",
+          message: `[dry-run] Would install ${key}`,
+          verifyPassed: false,
+        };
+      }
+      const mkt = await ensureMarketplace(env, slug, marketplaceName);
+      if (!mkt.ok) {
+        return {
+          component: name,
+          status: "failed",
+          message: `claude plugin marketplace add exited with code ${mkt.exitCode}`,
+          verifyPassed: false,
+        };
+      }
+      if ((await listInstalledPlugins(env)).has(key)) {
+        return {
+          component: name,
+          status: "already-installed",
+          message: `${name} already installed`,
+          verifyPassed: true,
+        };
+      }
+      return installPlugin(name, marketplaceName, false);
+    },
+    verify: async (env) => (await listInstalledPlugins(env)).has(key),
+  };
 }
+
+export const ccPluginsSpecs: ComponentSpec[] = CORE_PLUGINS.map(
+  (n, i) => pluginSpec(200 + i, n, MARKETPLACE_SLUG, MARKETPLACE_NAME),
+);
 
 export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
   const results: InstallResult[] = [];
 
   if (!commandExists("claude")) {
-    for (const name of ALL_PLUGINS) {
+    for (const name of CORE_PLUGINS) {
       results.push({
         component: name,
         status: "skipped",
@@ -171,8 +161,8 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
   }
 
   if (dryRun) {
-    log.info(`[dry-run] Would add ${MARKETPLACE_SLUG} marketplace and install ${ALL_PLUGINS.length} plugins`);
-    for (const name of ALL_PLUGINS) {
+    log.info(`[dry-run] Would add ${MARKETPLACE_SLUG} marketplace and install ${CORE_PLUGINS.length} plugins`);
+    for (const name of CORE_PLUGINS) {
       results.push({
         component: name,
         status: "skipped",
@@ -183,103 +173,12 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
     return results;
   }
 
-  if (!(await marketplaceRegistered(env))) {
-    log.info(`Adding marketplace: ${MARKETPLACE_SLUG}`);
-    const mkt = await $`claude plugin marketplace add ${MARKETPLACE_SLUG}`.nothrow();
-    if (mkt.exitCode !== 0) {
-      const msg = `claude plugin marketplace add exited with code ${mkt.exitCode}`;
-      for (const name of ALL_PLUGINS) {
-        results.push({ component: name, status: "failed", message: msg, verifyPassed: false });
-      }
-      return results;
-    }
+  for (const spec of ccPluginsSpecs) {
+    results.push(await runComponent(spec, env, dryRun));
   }
 
-  const initiallyInstalled = await loadInstalledPlugins(env);
-
-  for (const name of ALL_PLUGINS) {
-    const key = `${name}@${MARKETPLACE_NAME}`;
-    if (initiallyInstalled.has(key)) {
-      results.push({
-        component: name,
-        status: "already-installed",
-        message: `${name} already installed`,
-        verifyPassed: true,
-      });
-      continue;
-    }
-
-    log.info(`Installing ${name}@${MARKETPLACE_NAME}`);
-    const out = await $`claude plugin install ${key}`.nothrow();
-    if (out.exitCode === 0) {
-      results.push({
-        component: name,
-        status: "installed",
-        message: `${name} installed`,
-        verifyPassed: true,
-      });
-    } else {
-      results.push({
-        component: name,
-        status: "failed",
-        message: `claude plugin install exited ${out.exitCode}`,
-        verifyPassed: false,
-      });
-    }
-  }
-
-  results.push(...(await installRealLspBinaries(env, dryRun)));
-
-  for (const { slug, marketplaceName, plugins } of EXTRA_MARKETPLACES) {
-    const knownPath = join(env.claudeDir, "plugins", "known_marketplaces.json");
-    let mpText = "";
-    try { mpText = await fs.readFile(knownPath, "utf-8"); } catch { }
-    if (!mpText.includes(marketplaceName)) {
-      log.info(`Adding marketplace: ${slug}`);
-      const mkt = await $`claude plugin marketplace add ${slug}`.nothrow();
-      if (mkt.exitCode !== 0) {
-        for (const name of plugins) {
-          results.push({
-            component: name,
-            status: "failed",
-            message: `claude plugin marketplace add ${slug} exited ${mkt.exitCode}`,
-            verifyPassed: false,
-          });
-        }
-        continue;
-      }
-    }
-
-    const installedNow = await loadInstalledPlugins(env);
-    for (const name of plugins) {
-      const key = `${name}@${marketplaceName}`;
-      if (installedNow.has(key)) {
-        results.push({
-          component: name,
-          status: "already-installed",
-          message: `${name} already installed`,
-          verifyPassed: true,
-        });
-        continue;
-      }
-      log.info(`Installing ${key}`);
-      const out = await $`claude plugin install ${key}`.nothrow();
-      if (out.exitCode === 0) {
-        results.push({
-          component: name,
-          status: "installed",
-          message: `${name} installed (from ${slug})`,
-          verifyPassed: true,
-        });
-      } else {
-        results.push({
-          component: name,
-          status: "failed",
-          message: `claude plugin install ${key} exited ${out.exitCode}`,
-          verifyPassed: false,
-        });
-      }
-    }
+  for (const t of LSP_TARGETS) {
+    results.push(await installLspBinary(t, dryRun));
   }
 
   return results;

@@ -25,8 +25,8 @@ const PROJECT_DIR = join(import.meta.dir, "..", "..");
 const REAL_CONFIGS_DIR = join(PROJECT_DIR, "configs");
 const REAL_BACKUP_BASE = join(Bun.env.HOME ?? "~", ".claude-backup");
 
-// Mock installBinary so no real apt/brew/curl/cargo commands run.
 // Keep all file-operation utils real so deploySettings, deployHooks, etc. actually write files.
+// Override getConfigsDir to always return the real configs path regardless of cwd.
 mock.module("../../src/utils.js", () => {
   return {
     commandExists,
@@ -41,9 +41,19 @@ mock.module("../../src/utils.js", () => {
     mergeJsonFile,
     appendToShellRc,
     log,
-    // Override getConfigsDir to always return the real configs path regardless of cwd
     getConfigsDir: () => REAL_CONFIGS_DIR,
-    // Override installBinary to never run real package manager commands
+  };
+});
+
+// Mock installBinary (and the data-export surface) so no real apt/brew/curl/cargo commands run.
+const { CORE_PLUGINS, DEV_CLI_PACKAGES, LAZYGIT_CURL, SOPS_CURL, GITLEAKS_CURL } = await import("../../src/packages.js");
+mock.module("../../src/packages.js", () => {
+  return {
+    CORE_PLUGINS,
+    DEV_CLI_PACKAGES,
+    LAZYGIT_CURL,
+    SOPS_CURL,
+    GITLEAKS_CURL,
     installBinary: async (pkg: { name: string; displayName?: string }): Promise<InstallResult> => ({
       component: pkg.displayName ?? pkg.name,
       status: "already-installed",

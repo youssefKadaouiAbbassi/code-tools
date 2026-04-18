@@ -55,12 +55,13 @@ describe("Config validation", () => {
 
   test("all hooks have correct shebang", async () => {
     const hookDirs = [
-      join(CONFIGS_DIR, "hooks"),
+      join(CONFIGS_DIR, "home-claude/hooks"),
       join(CONFIGS_DIR, "project-claude/hooks"),
     ];
     for (const dir of hookDirs) {
       const glob = new Glob("*.sh");
       for await (const file of glob.scan(dir)) {
+        if (file.startsWith("_")) continue;
         const text = await Bun.file(join(dir, file)).text();
         const firstLine = text.split("\n")[0];
         expect(firstLine).toBe("#!/usr/bin/env bash");
@@ -70,15 +71,14 @@ describe("Config validation", () => {
 
   test("all hooks set errexit (either `set -euo pipefail` or `set -u` with trap)", async () => {
     const hookDirs = [
-      join(CONFIGS_DIR, "hooks"),
+      join(CONFIGS_DIR, "home-claude/hooks"),
       join(CONFIGS_DIR, "project-claude/hooks"),
     ];
     for (const dir of hookDirs) {
       const glob = new Glob("*.sh");
       for await (const file of glob.scan(dir)) {
+        if (file.startsWith("_")) continue;
         const text = await Bun.file(join(dir, file)).text();
-        // Strict mode via `set -euo pipefail` OR minimal `set -u` + `trap … ERR`
-        // (session-start + stop-summary use the latter to survive SIGPIPE).
         const strict =
           text.includes("set -euo pipefail") ||
           (text.includes("set -u") && text.includes("trap 'exit 0' ERR"));

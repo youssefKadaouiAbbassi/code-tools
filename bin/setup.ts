@@ -52,7 +52,7 @@ const main = defineCommand({
     },
   },
   subCommands: {
-    setup: () => import("../src/commands/setup.js").then((m) => m.default),
+    setup: () => import("../src/commands/setup/index.js").then((m) => m.default),
     status: () => import("../src/commands/status.js").then((m) => m.default),
     restore: () => import("../src/commands/restore.js").then((m) => m.default),
     update: () => import("../src/commands/update.js").then((m) => m.default),
@@ -65,7 +65,7 @@ const main = defineCommand({
       // Subcommand was matched and already executed by citty — do nothing.
       return;
     }
-    const setupCmd = await import("../src/commands/setup.js").then(
+    const setupCmd = await import("../src/commands/setup/index.js").then(
       (m) => m.default
     );
     await runCommand(setupCmd, { rawArgs });

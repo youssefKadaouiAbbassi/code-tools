@@ -82,10 +82,13 @@ describe("scope isolation guardrails", () => {
 
     for (const file of files) {
       const base = file.split("/").pop()!;
-      if (base === "install-mode.ts") continue; // owner
+      if (base === "scope.ts") continue; // canonical scope owner per Principle 4
       if (base === "backup.ts" && file.includes("/utils/")) continue; // utils/backup.ts has internal joins on claudeDir
       if (base === "restore.ts") continue; // consumes homedir() only in non-destructive resolveLegacyTargetDir
       if (base === "detect.ts") continue; // claudeDir field is initialized here
+      // hooks.ts owns ~/.claude/yka-hooks-disabled — per-user CLI runtime state,
+      // intentionally global (same pattern as install-journal.ts per-user config).
+      if (base === "hooks.ts" && file.includes("/commands/")) continue;
 
       const lines = await readLines(file);
       lines.forEach((text, idx) => {

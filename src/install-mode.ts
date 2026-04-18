@@ -1,5 +1,5 @@
 /** Install mode orchestrator: resolves scope (global/local), install mode (clean/add-on-top/fresh),
- *  and manages backups. Single owner of scope resolution per plan Principle 4.
+ *  and manages backups. Scope primitives live in ./scope.ts (Principle 4 single owner).
  */
 import { promises as fs } from "fs";
 import { join } from "path";
@@ -8,6 +8,7 @@ import * as clack from "@clack/prompts";
 import pc from "picocolors";
 import { createFullBackup } from "./utils/backup.js";
 import { log } from "./utils.js";
+import { resolveClaudeDir, rewriteEnvForScope } from "./scope.js";
 import type { DetectedEnvironment } from "./types.js";
 
 export type InstallMode = "clean" | "add-on-top" | "fresh";
@@ -29,31 +30,6 @@ export interface ResolveInstallModeArgs {
   "yes-wipe"?: boolean;
   "force-overwrite"?: boolean;
   "non-interactive"?: boolean;
-}
-
-/**
- * Single owner of claude directory resolution.
- * --local → $PWD/.claude; else → $HOME/.claude.
- */
-export function resolveClaudeDir(
-  args: { local?: boolean },
-  cwd: string,
-  home: string,
-): string {
-  if (args.local) return join(cwd, ".claude");
-  return join(home, ".claude");
-}
-
-/**
- * Pure function returning a new env with claudeDir rewritten for the target scope.
- * shellRcPath and homeDir stay put: shell rc is user-global by design, and --local
- * installs skip shell-rc edits + global binary installs (see core.ts).
- */
-export function rewriteEnvForScope(
-  env: DetectedEnvironment,
-  claudeDir: string,
-): DetectedEnvironment {
-  return { ...env, claudeDir };
 }
 
 async function hasExistingInstall(claudeDir: string): Promise<boolean> {
