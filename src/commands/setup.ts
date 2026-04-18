@@ -5,12 +5,11 @@ import { detectEnvironment } from "../detect.js";
 import { installCore } from "../core.js";
 import { isLocalScope } from "../scope.js";
 import { verifyAll } from "../verify.js";
+import { installCategory } from "../components/index.js";
 import {
-  RECOMMENDED_CATEGORIES,
-  OPTIONAL_CATEGORIES,
-  ALL_CATEGORIES,
-  installCategory,
-} from "../components/index.js";
+  selectInteractive,
+  pickCategoriesForTier,
+} from "./setup/select-categories.js";
 import { join } from "path";
 import {
   log,
@@ -25,7 +24,7 @@ import {
 import { performCleanInstall, restoreFromBackup } from "../utils/backup.js";
 import { resolveInstallMode, type ResolvedInstallMode } from "../install-mode.js";
 import { rollbackAddOnTop, type DeployMode } from "../add-on-top.js";
-import type { DetectedEnvironment, InstallResult, ComponentCategory } from "../types.js";
+import type { DetectedEnvironment, InstallResult } from "../types.js";
 
 function toDeployMode(resolved: ResolvedInstallMode): DeployMode {
   return {
@@ -77,11 +76,6 @@ function formatEnvLine(env: DetectedEnvironment): string {
   return lines.join("\n");
 }
 
-function handleCancel(): never {
-  clack.cancel("Setup cancelled.");
-  process.exit(0);
-}
-
 async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment, deployMode?: DeployMode): Promise<void> {
   clack.intro(
     pc.bold(pc.cyan("yka-code")) + pc.dim(" — Setup")
@@ -130,121 +124,7 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
     return;
   }
 
-  // --- 5. Two-section batch choice flow ---
-  const selectedCategories: ComponentCategory[] = [];
-  const skippedComponents = new Set<number>(); // Track components user doesn't want
-
-  // --- SECTION 1: System Tools Batch Choice ---
-  const systemComponents = [
-    { id: 36, name: "Ghostty", description: "Fast, feature-rich GPU-accelerated terminal emulator" },
-    { id: 39, name: "chezmoi", description: "Dotfile manager with templating and encryption" },
-    { id: 41, name: "age", description: "Simple, modern file encryption tool" },
-  ];
-
-  clack.note(
-    [
-      "Optional system tools (not directly Claude Code related):",
-      "",
-      ...systemComponents.map(c => `  • ${pc.bold(c.name)} — ${c.description}`),
-    ].join("\n"),
-    "🛠️  System Tools"
-  );
-
-  const systemChoice = await clack.select({
-    message: "Install these system tools?",
-    options: [
-      { value: "all", label: "Install all", hint: "recommended" },
-      { value: "pick", label: "Let me pick", hint: "choose individually" },
-      { value: "none", label: "Skip all", hint: "don't install any" },
-    ],
-    initialValue: "all",
-  });
-
-  if (clack.isCancel(systemChoice)) handleCancel();
-
-  if (systemChoice === "all") {
-    // Install all system tools - don't skip any
-    const workstationCat = RECOMMENDED_CATEGORIES.find(cat => cat.id === "workstation");
-    if (workstationCat) selectedCategories.push(workstationCat);
-  } else if (systemChoice === "pick") {
-    // Individual choice for each system tool
-    for (const component of systemComponents) {
-      const install = await clack.confirm({
-        message: `Install ${pc.bold(component.name)}?\n  ${pc.dim(component.description)}`,
-        initialValue: false,
-      });
-      if (clack.isCancel(install)) handleCancel();
-
-      if (!install) {
-        skippedComponents.add(component.id);
-      }
-    }
-
-    // Include workstation category if any system tools were selected
-    const selectedSystemTools = systemComponents.filter(c => !skippedComponents.has(c.id));
-    if (selectedSystemTools.length > 0) {
-      const workstationCat = RECOMMENDED_CATEGORIES.find(cat => cat.id === "workstation");
-      if (workstationCat) selectedCategories.push(workstationCat);
-    }
-  } else {
-    // Skip all system tools
-    systemComponents.forEach(c => skippedComponents.add(c.id));
-  }
-
-  // --- SECTION 2: Claude Code Functionality Batch Choice ---
-  const claudeCategories = RECOMMENDED_CATEGORIES.filter(cat => cat.id !== "workstation");
-
-  clack.note(
-    [
-      "Claude Code functionality categories:",
-      "",
-      ...claudeCategories.map(c => `  • ${pc.bold(c.name)} — ${c.description}`),
-      "",
-      "Optional categories:",
-      ...OPTIONAL_CATEGORIES.map(c => `  • ${pc.bold(c.name)} — ${c.description}`),
-    ].join("\n"),
-    "🎯 Claude Code Features"
-  );
-
-  const claudeChoice = await clack.select({
-    message: "Install Claude Code functionality?",
-    options: [
-      { value: "all", label: "Everything", hint: "recommended - install all features" },
-      { value: "recommended", label: "Recommended only", hint: "skip optional categories" },
-      { value: "pick", label: "Let me pick", hint: "choose categories individually" },
-      { value: "none", label: "Skip all", hint: "just system tools + core" },
-    ],
-    initialValue: "all",
-  });
-
-  if (clack.isCancel(claudeChoice)) handleCancel();
-
-  if (claudeChoice === "all") {
-    selectedCategories.push(...claudeCategories, ...OPTIONAL_CATEGORIES);
-  } else if (claudeChoice === "recommended") {
-    selectedCategories.push(...claudeCategories);
-  } else if (claudeChoice === "pick") {
-    // Individual choice for recommended categories
-    for (const cat of claudeCategories) {
-      const install = await clack.confirm({
-        message: `${pc.bold(cat.name)}\n  ${pc.dim(cat.description)}`,
-        initialValue: true,
-      });
-      if (clack.isCancel(install)) handleCancel();
-      if (install) selectedCategories.push(cat);
-    }
-
-    // Individual choice for optional categories
-    for (const cat of OPTIONAL_CATEGORIES) {
-      const install = await clack.confirm({
-        message: `${pc.bold(cat.name)}\n  ${pc.dim(cat.description)}`,
-        initialValue: false,
-      });
-      if (clack.isCancel(install)) handleCancel();
-      if (install) selectedCategories.push(cat);
-    }
-  }
-  // else: none - skip all Claude Code functionality
+  const { categories: selectedCategories, skippedComponents } = await selectInteractive();
 
   // --- 6. Install selected categories ---
   const categoryResults: InstallResult[] = [];
@@ -416,12 +296,6 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
   );
 }
 
-function pickCategories(tier?: string): ComponentCategory[] {
-  if (tier === "recommended") return RECOMMENDED_CATEGORIES;
-  if (tier === "all" || !tier) return ALL_CATEGORIES;
-  return [];
-}
-
 async function runBatch(
   env: DetectedEnvironment,
   dryRun: boolean,
@@ -442,7 +316,7 @@ async function runBatch(
   }
 
   const allResults = [...coreResults];
-  for (const cat of pickCategories(tier)) {
+  for (const cat of pickCategoriesForTier(tier)) {
     log.info(`Installing category: ${cat.name}`);
     try {
       const results = await installCategory(cat, env, dryRun, new Set());
