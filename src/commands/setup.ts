@@ -2,19 +2,20 @@ import { defineCommand } from "citty";
 import * as clack from "@clack/prompts";
 import pc from "picocolors";
 import { detectEnvironment } from "../detect.js";
-import { installCore } from "../core.js";
 import { isLocalScope } from "../scope.js";
 import { verifyAll } from "../verify.js";
-import { installCategory } from "../components/index.js";
 import {
   selectInteractive,
   pickCategoriesForTier,
 } from "./setup/select-categories.js";
-import { join } from "path";
+import {
+  installCoreStep,
+  installCategories,
+  reapplyHardenedSettings,
+  recordJournal,
+} from "./setup/execute-installs.js";
 import {
   log,
-  mergeJsonFile,
-  getConfigsDir,
   promptForMissingEnvVars,
   loadSecretsFromFile,
   saveSecretsToFile,
@@ -24,7 +25,7 @@ import {
 import { performCleanInstall, restoreFromBackup } from "../utils/backup.js";
 import { resolveInstallMode, type ResolvedInstallMode } from "../install-mode.js";
 import { rollbackAddOnTop, type DeployMode } from "../add-on-top.js";
-import type { DetectedEnvironment, InstallResult } from "../types.js";
+import type { DetectedEnvironment } from "../types.js";
 
 function toDeployMode(resolved: ResolvedInstallMode): DeployMode {
   return {
@@ -33,22 +34,6 @@ function toDeployMode(resolved: ResolvedInstallMode): DeployMode {
     conflictPolicy: resolved.conflictPolicy,
     claudeDir: resolved.resolvedEnv.claudeDir,
   };
-}
-
-// Third-party installers can overwrite permissions.deny; re-apply ours last.
-async function reapplyHardenedSettings(env: DetectedEnvironment, dryRun: boolean): Promise<void> {
-  if (dryRun) return;
-  const homeNormalized = env.homeDir.replace(/\/+$/, "");
-  const scope = env.claudeDir.startsWith(homeNormalized + "/") ? "home-claude" : "project-claude";
-  const sourcePath = join(getConfigsDir(), scope, "settings.json");
-  const targetPath = join(env.claudeDir, "settings.json");
-  try {
-    const patch = await Bun.file(sourcePath).json() as Record<string, unknown>;
-    await mergeJsonFile(targetPath, patch);
-    log.info("Re-applied hardened settings.json (deny rules + env vars)");
-  } catch (err) {
-    log.warn(`Could not re-apply hardened settings: ${err instanceof Error ? err.message : String(err)}`);
-  }
 }
 
 // MCP servers that require API keys, in order of likelihood
@@ -107,7 +92,7 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
   // Don't wrap in a spinner: core may shell out to package managers (apt/brew/etc)
   // which need stdin/stdout for sudo prompts and progress output.
   log.info("Installing core core (you may be prompted for sudo)...");
-  const coreResults = await installCore(env, dryRun, deployMode);
+  const coreResults = await installCoreStep(env, dryRun, deployMode);
   log.success("Core core step complete");
 
   if (isLocalScope(env)) {
@@ -127,31 +112,21 @@ async function runInteractive(dryRun: boolean, envOverride?: DetectedEnvironment
   const { categories: selectedCategories, skippedComponents } = await selectInteractive();
 
   // --- 6. Install selected categories ---
-  const categoryResults: InstallResult[] = [];
-
-  for (const cat of selectedCategories) {
-    // Don't wrap in clack.spinner — third-party installers (claude-mem, snyk, etc.)
-    // print their own progress / TUI which conflicts with the spinner's terminal control.
-    log.info(`Installing ${cat.name}...`);
-    try {
-      const results = await installCategory(cat, env, dryRun, skippedComponents);
-      categoryResults.push(...results);
-      const failed = results.filter((r) => r.status === "failed").length;
-      if (failed > 0) {
-        log.warn(`${cat.name} — ${failed} failed`);
-      } else {
-        log.success(`${cat.name} — done`);
-      }
-    } catch (err) {
-      log.error(`${cat.name} — error: ${err instanceof Error ? err.message : String(err)}`);
-      categoryResults.push({
-        component: cat.name,
+  // Don't wrap in clack.spinner — third-party installers (claude-mem, snyk, etc.)
+  // print their own progress / TUI which conflicts with the spinner's terminal control.
+  const categoryResults = await installCategories(env, selectedCategories, skippedComponents, dryRun, {
+    onStart: (name) => log.info(`Installing ${name}...`),
+    onDone: (name, failed) => failed > 0 ? log.warn(`${name} — ${failed} failed`) : log.success(`${name} — done`),
+    onThrow: (name, err) => {
+      log.error(`${name} — error: ${err instanceof Error ? err.message : String(err)}`);
+      return {
+        component: name,
         status: "failed",
         message: `Category install threw: ${err instanceof Error ? err.message : String(err)}`,
         verifyPassed: false,
-      });
-    }
-  }
+      };
+    },
+  });
 
   const allResults = [...coreResults, ...categoryResults];
 
@@ -306,7 +281,7 @@ async function runBatch(
   log.info(`Tier: ${tier ?? "all"}, dry-run: ${dryRun}`);
   log.info(`OS: ${env.os} (${env.arch}), shell: ${env.shell}, pkg: ${env.packageManager}`);
 
-  const coreResults = await installCore(env, dryRun, deployMode);
+  const coreResults = await installCoreStep(env, dryRun, deployMode);
   if (tier === "core" || isLocalScope(env)) {
     if (isLocalScope(env)) log.info("Local install complete (category installers skipped — they're user-global).");
     else log.info("Core tier complete.");
@@ -315,69 +290,26 @@ async function runBatch(
     return;
   }
 
-  const allResults = [...coreResults];
-  for (const cat of pickCategoriesForTier(tier)) {
-    log.info(`Installing category: ${cat.name}`);
-    try {
-      const results = await installCategory(cat, env, dryRun, new Set());
-      allResults.push(...results);
-      if (verbose) {
-        for (const r of results) {
-          if (r.status === "failed") log.error(`  FAILED: ${r.component} — ${r.message}`);
-          else log.success(`  ${r.component}: ${r.message}`);
-        }
-      }
-    } catch (err) {
-      log.error(`Category ${cat.name} threw: ${err instanceof Error ? err.message : String(err)}`);
+  const categoryResults = await installCategories(env, pickCategoriesForTier(tier), new Set(), dryRun, {
+    onStart: (name) => log.info(`Installing category: ${name}`),
+    onThrow: (name, err) => {
+      log.error(`Category ${name} threw: ${err instanceof Error ? err.message : String(err)}`);
+      return undefined;
+    },
+  });
+  if (verbose) {
+    for (const r of categoryResults) {
+      if (r.status === "failed") log.error(`  FAILED: ${r.component} — ${r.message}`);
+      else log.success(`  ${r.component}: ${r.message}`);
     }
   }
+  const allResults = [...coreResults, ...categoryResults];
 
   await reapplyHardenedSettings(env, dryRun);
   const report = await verifyAll(env, allResults);
   log.info(`Verification: ${report.passed} passed, ${report.failed} failed, ${report.skipped} skipped`);
 
   if (!dryRun) await recordJournal(env, tier);
-}
-
-async function recordJournal(env: DetectedEnvironment, tier: string | undefined): Promise<void> {
-  const { writeJournal } = await import("../install-journal.js");
-  const { readFileSync } = await import("node:fs");
-  const pkgPath = join(getConfigsDir(), "..", "package.json");
-  let version = "0.0.0";
-  try {
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
-    if (typeof pkg.version === "string") version = pkg.version;
-  } catch {}
-
-  const readDirManifest = async (dir: string): Promise<string[]> => {
-    try {
-      const m = JSON.parse(await Bun.file(join(env.claudeDir, dir, ".yka-code-managed.json")).text()) as { entries?: string[] };
-      return m.entries ?? [];
-    } catch { return []; }
-  };
-
-  const { CORE_PLUGINS } = await import("../packages.js");
-  const { $ } = await import("bun");
-
-  let actuallyInstalled: string[] = [];
-  try {
-    const listed = await $`claude plugin list`.quiet().nothrow().text();
-    actuallyInstalled = CORE_PLUGINS.filter((name) => listed.includes(name));
-  } catch {
-    actuallyInstalled = [];
-  }
-
-  await writeJournal({
-    version,
-    tier: (tier === "core" || tier === "recommended" || tier === "all") ? tier : "recommended",
-    scope: isLocalScope(env) ? "local" : "global",
-    installedAt: new Date().toISOString(),
-    plugins: actuallyInstalled.map((name) => ({ name, marketplace: "claude-plugins-official" })),
-    skills: await readDirManifest("skills"),
-    commands: await readDirManifest("commands"),
-    agents: await readDirManifest("agents"),
-    hooks: await readDirManifest("hooks"),
-  });
 }
 
 export default defineCommand({
