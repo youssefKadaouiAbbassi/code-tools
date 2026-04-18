@@ -86,22 +86,6 @@ async function deployClaudeMd(env: DetectedEnvironment, dryRun: boolean, deployM
 }
 
 const MANIFEST_NAME = ".yka-code-managed.json";
-const MANIFEST_VERSION = 1;
-
-type DeployManifest = { version?: number; entries: string[] };
-
-async function readManifest(path: string): Promise<string[]> {
-  try {
-    const data = JSON.parse(await Bun.file(path).text()) as DeployManifest;
-    return Array.isArray(data.entries) ? data.entries : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeManifest(path: string, entries: string[]): Promise<void> {
-  await Bun.write(path, JSON.stringify({ version: MANIFEST_VERSION, entries: entries.sort() }, null, 2) + "\n");
-}
 
 type ManagedTreeSpec = {
   component: string;
@@ -137,70 +121,31 @@ function deployManagedTree(
   });
 }
 
-async function deployHooks(env: DetectedEnvironment, dryRun: boolean, deployMode?: DeployMode): Promise<InstallResult> {
-  const component = "claude-hooks";
-  const hooksSourceDir = isLocalScope(env)
-    ? join(getConfigsDir(), "project-claude", "hooks")
-    : join(getConfigsDir(), "home-claude", "hooks");
-  const hooksTargetDir = join(env.claudeDir, "hooks");
-  const manifestPath = join(hooksTargetDir, MANIFEST_NAME);
-
-  const hookFiles = await Array.fromAsync(
-    new Bun.Glob("*.{sh,js,ts,py}").scan({ cwd: hooksSourceDir, onlyFiles: true })
-  );
-  const previous = await readManifest(manifestPath);
-  const stale = previous.filter((name) => !hookFiles.includes(name));
-
-  if (dryRun) {
-    log.info(`[dry-run] Would deploy ${hookFiles.length} hook(s) to ${hooksTargetDir} with chmod 755`);
-    if (stale.length > 0) log.info(`[dry-run] Would remove ${stale.length} stale hook(s): ${stale.join(", ")}`);
-    return { component, status: "skipped", message: `[dry-run] Would deploy ${hookFiles.length} hooks, remove ${stale.length} stale`, verifyPassed: false };
-  }
-
-  try {
-    await ensureDir(hooksTargetDir);
-
-    for (const name of stale) {
-      await $`rm -f ${join(hooksTargetDir, name)}`.quiet();
-    }
-
-    const previousHookSet = new Set(previous);
-    let skippedHooks = 0;
-    for (const hookFile of hookFiles) {
-      const src = join(hooksSourceDir, hookFile);
-      const dest = join(hooksTargetDir, hookFile);
-      if (!previousHookSet.has(hookFile) && await resolveWrite(dest, deployMode) === "skip") {
-        skippedHooks++;
-        continue;
-      }
-      await copyFile(src, dest);
-      await $`chmod 755 ${dest}`.quiet();
-    }
-    await $`chmod 755 ${hooksTargetDir}`.quiet();
-    await writeManifest(manifestPath, hookFiles);
-
-    const settingsPath = join(env.claudeDir, "settings.json");
-    const hookFilenames = new Set(hookFiles);
-
-    const hooksConfig = buildHooksConfig(
-      (file) => ({ type: "command", command: join(hooksTargetDir, file) }),
-      { filter: (file) => hookFilenames.has(file) },
-    );
-
-    await resolveMerge(settingsPath, ["hooks"], deployMode);
-    await mergeJsonFile(settingsPath, { hooks: hooksConfig });
-
-    const skipMsg = skippedHooks > 0 ? `, skipped ${skippedHooks} (user-owned collision)` : "";
-    log.success(`Deployed ${hookFiles.length - skippedHooks} hook scripts and wired them into settings.json${skipMsg}`);
-    return { component, status: "installed", message: `${hookFiles.length - skippedHooks} hook scripts deployed and wired${skipMsg}`, verifyPassed: true };
-  } catch (error) {
-    return {
-      component,
-      status: "failed",
-      message: `Failed to deploy hooks: ${error instanceof Error ? error.message : String(error)}`,
-      verifyPassed: false,
-    };
-  }
+function deployHooks(env: DetectedEnvironment, dryRun: boolean, deployMode?: DeployMode): Promise<InstallResult> {
+  const dst = join(env.claudeDir, "hooks");
+  return deployManagedDirectory({
+    component: "claude-hooks",
+    src: join(getConfigsDir(), templateDir(env), "hooks"),
+    dst,
+    manifestPath: join(dst, MANIFEST_NAME),
+    kind: "hooks",
+    entryKind: "file",
+    glob: "*.{sh,js,ts,py}",
+    deployMode,
+    dryRun,
+    onCopyEntry: async (target) => { await $`chmod 755 ${target}`.quiet(); },
+    onDeployComplete: async ({ dstDir, deployed }) => {
+      await $`chmod 755 ${dstDir}`.quiet();
+      const settingsPath = join(env.claudeDir, "settings.json");
+      const deployedSet = new Set(deployed);
+      const hooksConfig = buildHooksConfig(
+        (file) => ({ type: "command", command: join(dstDir, file) }),
+        { filter: (file) => deployedSet.has(file) },
+      );
+      await resolveMerge(settingsPath, ["hooks"], deployMode);
+      await mergeJsonFile(settingsPath, { hooks: hooksConfig });
+    },
+  });
 }
 
 async function installJq(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult> {

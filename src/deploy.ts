@@ -4,7 +4,7 @@ import type { InstallResult } from "./types.js";
 import { copyFile, copyDir, ensureDir, log } from "./utils.js";
 import { resolveWrite, type DeployMode } from "./add-on-top.js";
 
-export type DeployKind = "skills" | "commands" | "agents";
+export type DeployKind = "skills" | "commands" | "agents" | "hooks";
 
 export interface DeployManagedDirectoryOptions {
   component: string;
@@ -16,6 +16,8 @@ export interface DeployManagedDirectoryOptions {
   glob: string;
   deployMode?: DeployMode;
   dryRun: boolean;
+  onCopyEntry?: (target: string) => Promise<void>;
+  onDeployComplete?: (info: { dstDir: string; deployed: string[] }) => Promise<void>;
 }
 
 const MANIFEST_VERSION = 1;
@@ -28,6 +30,7 @@ const LABELS: Record<DeployKind, Labels> = {
   skills: { dryRun: "skills", staleSingular: "skill", success: "skill(s)", result: "skills" },
   commands: { dryRun: "command(s)", staleSingular: "slash command", success: "slash command(s)", result: "user commands" },
   agents: { dryRun: "agent(s)", staleSingular: "subagent", success: "subagent(s)", result: "user agents" },
+  hooks: { dryRun: "hook(s)", staleSingular: "hook", success: "hook script(s)", result: "hook scripts" },
 };
 
 async function readManifest(path: string): Promise<string[]> {
@@ -78,7 +81,7 @@ async function copyEntry(
 export async function deployManagedDirectory(
   opts: DeployManagedDirectoryOptions,
 ): Promise<InstallResult> {
-  const { component, src, dst, manifestPath, kind, entryKind, glob, deployMode, dryRun } = opts;
+  const { component, src, dst, manifestPath, kind, entryKind, glob, deployMode, dryRun, onCopyEntry, onDeployComplete } = opts;
   const labels = LABELS[kind];
 
   const current = await scanSourceEntries(src, glob, kind);
@@ -108,6 +111,7 @@ export async function deployManagedDirectory(
 
     const previousSet = new Set(previous);
     let skipped = 0;
+    const deployedEntries: string[] = [];
     for (const name of current) {
       const target = join(dst, name);
       if (!previousSet.has(name) && (await resolveWrite(target, deployMode)) === "skip") {
@@ -115,9 +119,12 @@ export async function deployManagedDirectory(
         continue;
       }
       await copyEntry(join(src, name), target, entryKind);
+      if (onCopyEntry) await onCopyEntry(target);
+      deployedEntries.push(name);
     }
 
     await writeManifest(manifestPath, current);
+    if (onDeployComplete) await onDeployComplete({ dstDir: dst, deployed: deployedEntries });
 
     const deployed = current.length - skipped;
     const removedMsg = stale.length > 0 ? `, removed ${stale.length} stale (${stale.join(", ")})` : "";
