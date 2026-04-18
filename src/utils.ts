@@ -93,9 +93,8 @@ export async function mergeJsonFile(targetPath: string, patch: Record<string, un
   await writeJson(targetPath, merged);
 }
 
-export type McpSpec =
-  | { transport: "stdio"; command: string; args?: string[]; env?: Record<string, string> }
-  | { transport: "http" | "sse"; url: string; headers?: Record<string, string> };
+import type { McpSpec } from "./types.js";
+export type { McpSpec } from "./types.js";
 
 export async function registerMcp(
   name: string,
