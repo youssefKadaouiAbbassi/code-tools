@@ -2,7 +2,8 @@ import { defineCommand } from "citty";
 import * as clack from "@clack/prompts";
 import pc from "picocolors";
 import { detectEnvironment } from "../detect.js";
-import { installCore, isLocalScope } from "../core.js";
+import { installCore } from "../core.js";
+import { isLocalScope } from "../scope.js";
 import { verifyAll } from "../verify.js";
 import {
   RECOMMENDED_CATEGORIES,
