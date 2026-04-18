@@ -20,12 +20,18 @@ if [[ -z "$command_str" ]]; then
   exit 0
 fi
 
+# Early-exit: commands that can't push even though they may mention
+# "git push" / "gh pr create" in their args (commit messages, docs writes).
+if printf '%s' "$command_str" | grep -qE '^[[:space:]]*(git[[:space:]]+(commit|log|show|diff|status|blame)|cat|printf|echo|tee|sed|awk|grep|rg|bat)([[:space:]]|$)'; then
+  exit 0
+fi
+
 is_pr_create=0
 is_push=0
-if printf '%s' "$command_str" | grep -qE 'gh[[:space:]]+pr[[:space:]]+create'; then
+if printf '%s' "$command_str" | grep -qE '(^|[[:space:]]*(\;|\&\&|\|\|)[[:space:]]*)gh[[:space:]]+pr[[:space:]]+create'; then
   is_pr_create=1
 fi
-if printf '%s' "$command_str" | grep -qE 'git[[:space:]]+push([[:space:]]|$)'; then
+if printf '%s' "$command_str" | grep -qE '(^|[[:space:]]*(\;|\&\&|\|\|)[[:space:]]*)git[[:space:]]+push([[:space:]]|$)'; then
   is_push=1
 fi
 
@@ -73,29 +79,69 @@ if [[ $is_pr_create -eq 1 ]]; then
   fi
 fi
 
-# Check 3: recent-test advisory — look for test invocations in the last 10 min
-# via bash history if available. Non-blocking; purely advisory on stderr.
+# Check 3: recent-test advisory — look for test invocations in the last 10 min.
+# Probes in order (stop on first hit):
+#   (a) today's session log written by session-start.sh (most reliable for zsh/bun users)
+#   (b) shell history (bash timestamped; zsh extended-history only — fragile)
+#   (c) mtime of common test-output dirs (coverage/, .pytest_cache/, etc.)
+# Non-blocking; purely advisory on stderr.
 if [[ $is_pr_create -eq 1 ]]; then
   recent_test=0
-  for hf in "$HOME/.bash_history" "$HOME/.zsh_history"; do
-    [[ -f "$hf" ]] || continue
+
+  # (a) session log scan
+  session_log="$HOME/.claude/session-logs/$(date '+%Y-%m-%d').log"
+  if [[ -f "$session_log" ]]; then
     if awk -v cutoff="$(date -d '10 minutes ago' '+%s' 2>/dev/null || date -v-10M '+%s' 2>/dev/null || echo 0)" '
-      /^: [0-9]+:/ { ts=substr($0,3,index($0,":")-3)+0; if (ts >= cutoff) { found=1 } }
+      /^timestamp:/ { ts = 0; for (i = 2; i <= NF; i++) { if ($i ~ /^[0-9]+$/) { ts = $i + 0; break } } }
+      /(bun test|pytest|cargo test|go test|npm test|vitest|jest|rspec|phpunit)/ {
+        if (ts >= cutoff) { found = 1 }
+      }
       END { exit !found }
-    ' "$hf" 2>/dev/null; then
+    ' "$session_log" 2>/dev/null; then
       recent_test=1
-      break
     fi
-  done
-  # Fall back to a file-mtime probe: if test output files exist and are recent, treat as "tested"
+  fi
+
+  # (b) shell history fallback
+  if [[ $recent_test -eq 0 ]]; then
+    for hf in "$HOME/.bash_history" "$HOME/.zsh_history"; do
+      [[ -f "$hf" ]] || continue
+      if awk -v cutoff="$(date -d '10 minutes ago' '+%s' 2>/dev/null || date -v-10M '+%s' 2>/dev/null || echo 0)" '
+        /^: [0-9]+:/ { ts=substr($0,3,index($0,":")-3)+0; if (ts >= cutoff) { found=1 } }
+        END { exit !found }
+      ' "$hf" 2>/dev/null; then
+        recent_test=1
+        break
+      fi
+    done
+  fi
+
+  # (c) test-output mtime probe
   if [[ $recent_test -eq 0 ]]; then
     for probe in coverage/ .nyc_output/ target/debug/deps/ pytest_cache/ .pytest_cache/; do
       [[ -d "$probe" ]] && [[ -n "$(find "$probe" -mmin -10 -type f 2>/dev/null | head -1)" ]] && { recent_test=1; break; }
     done
   fi
+
   if [[ $recent_test -eq 0 ]]; then
     printf 'Advisory: no test run detected in the last 10 minutes. Run your test suite before opening the PR.\n' >&2
   fi
+fi
+
+# Check 4: gitleaks secret scan (advisory, PR creation only). Catches provider tokens
+# pre-secrets-guard's hand-rolled regexes miss (Datadog, Figma, Shopify, Doppler, etc.).
+# Non-blocking — runs only if gitleaks is installed.
+if [[ $is_pr_create -eq 1 ]] && command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks protect --staged --redact --no-banner --exit-code 0 >/tmp/gitleaks-$$.log 2>&1; then
+    :
+  fi
+  if [[ -s /tmp/gitleaks-$$.log ]] && grep -q "leaks found:" /tmp/gitleaks-$$.log 2>/dev/null; then
+    leak_count="$(grep -oE 'leaks found: [0-9]+' /tmp/gitleaks-$$.log | grep -oE '[0-9]+' | head -1 || echo 0)"
+    if [[ "${leak_count:-0}" -gt 0 ]]; then
+      printf 'Advisory: gitleaks found %s potential secret(s) in staged changes. Run: gitleaks protect --staged --verbose\n' "$leak_count" >&2
+    fi
+  fi
+  rm -f /tmp/gitleaks-$$.log
 fi
 
 exit 0
