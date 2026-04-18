@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { join } from "node:path";
 
-const HOOKS_DIR = join(import.meta.dir, "../../configs/hooks");
+const HOOKS_DIR = join(import.meta.dir, "../../configs/home-claude/hooks");
 const FIXTURES_DIR = join(import.meta.dir, "../fixtures");
 
 type HookResult = {
