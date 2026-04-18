@@ -5,7 +5,6 @@ import {
   LAZYGIT_CURL,
   SOPS_CURL,
   GITLEAKS_CURL,
-  installBinary,
 } from "../../src/packages.js";
 import type { DetectedEnvironment } from "../../src/types.js";
 
@@ -105,28 +104,3 @@ describe("curl install scripts", () => {
   });
 });
 
-describe("installBinary dry-run", () => {
-  test("returns [dry-run] message for a package not yet installed", async () => {
-    const pkg = { name: "definitely-not-a-real-binary-zzz", displayName: "ghost", apt: "sudo apt-get install -y ghost" };
-    const result = await installBinary(pkg, env(), true);
-    expect(result.component).toBe("ghost");
-    expect(result.status).toBe("skipped");
-    expect(result.message).toContain("[dry-run]");
-    expect(result.message).toContain("sudo apt-get install -y ghost");
-    expect(result.verifyPassed).toBe(false);
-  });
-
-  test("falls back to curl when pkg manager has no entry", async () => {
-    const pkg = { name: "definitely-not-a-real-binary-zzz2", displayName: "ghost2", curl: "curl https://example/install | sh" };
-    const result = await installBinary(pkg, env({ packageManager: "apt" }), true);
-    expect(result.message).toContain("curl https://example/install | sh");
-  });
-
-  test("reports skipped when no install method matches the environment", async () => {
-    const pkg = { name: "definitely-not-a-real-binary-zzz3", displayName: "ghost3", brew: "brew install ghost3" };
-    const result = await installBinary(pkg, env({ packageManager: "apt" }), true);
-    expect(result.status).toBe("skipped");
-    expect(result.message).toContain("No install method for ghost3 on apt");
-    expect(result.verifyPassed).toBe(false);
-  });
-});

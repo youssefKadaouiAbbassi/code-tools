@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
-import { commandExists, installBinary, log } from "../utils.js";
+import { commandExists, log } from "../utils.js";
+import { installBinary } from "../packages.js";
 
 export const workstationCategory: ComponentCategory = {
   id: "workstation",

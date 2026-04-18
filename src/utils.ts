@@ -3,7 +3,7 @@ import { mkdir, exists, cp, chmod } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import pc from "picocolors";
 import { deepmergeCustom } from "deepmerge-ts";
-import type { DetectedEnvironment, InstallPackage, InstallResult } from "./types.js";
+import type { DetectedEnvironment } from "./types.js";
 
 export function commandExists(name: string): boolean {
   if (!/^[a-zA-Z0-9_.\-]+$/.test(name)) return false;
@@ -150,55 +150,6 @@ export async function appendToShellRc(
   }
 
   await Bun.write(rcPath, content);
-}
-
-export async function installBinary(
-  pkg: InstallPackage,
-  env: DetectedEnvironment,
-  dryRun = false
-): Promise<InstallResult> {
-  const name = pkg.displayName || pkg.name;
-
-  if (commandExists(pkg.name)) {
-    return { component: name, status: "already-installed", message: `${name} is already installed`, verifyPassed: true };
-  }
-
-  let cmd: string | undefined;
-  switch (env.packageManager) {
-    case "brew": cmd = pkg.brew; break;
-    case "apt": cmd = pkg.apt; break;
-    case "pacman": cmd = pkg.pacman; break;
-    case "dnf": cmd = pkg.dnf; break;
-  }
-  if (!cmd) cmd = pkg.npm ?? pkg.cargo ?? pkg.pip ?? pkg.curl;
-  if (!cmd) cmd = pkg.manual;
-
-  if (!cmd) {
-    return { component: name, status: "skipped", message: `No install method for ${name} on ${env.packageManager}`, verifyPassed: false };
-  }
-
-  if (dryRun) {
-    return { component: name, status: "skipped", message: `[dry-run] Would run: ${cmd}`, verifyPassed: false };
-  }
-
-  try {
-    // Don't quiet: sudo prompts must reach the terminal.
-    await $`sh -c ${cmd}`;
-    const installed = commandExists(pkg.name);
-    return {
-      component: name,
-      status: installed ? "installed" : "failed",
-      message: installed ? `${name} installed successfully` : `${name} install command ran but binary not found`,
-      verifyPassed: installed,
-    };
-  } catch (error) {
-    return {
-      component: name,
-      status: "failed",
-      message: `Failed to install ${name}: ${error instanceof Error ? error.message : String(error)}`,
-      verifyPassed: false,
-    };
-  }
 }
 
 export function getSecretsFilePath(homeDir: string): string {

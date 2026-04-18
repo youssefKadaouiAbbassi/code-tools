@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { ccPluginsCategory, CORE_PLUGINS, install } from "../../src/components/cc-plugins.js";
+import { ccPluginsCategory, install } from "../../src/components/cc-plugins.js";
+import { CORE_PLUGINS } from "../../src/packages.js";
 import type { DetectedEnvironment } from "../../src/types.js";
 
 function env(over: Partial<DetectedEnvironment> = {}): DetectedEnvironment {

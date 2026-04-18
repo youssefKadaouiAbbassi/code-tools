@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
-import { commandExists, installBinary, registerMcp, log } from "../utils.js";
+import { commandExists, registerMcp, log } from "../utils.js";
+import { installBinary } from "../packages.js";
 
 export const codeIntelCategory: ComponentCategory = {
   id: "code-intel",

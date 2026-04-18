@@ -3,25 +3,13 @@ import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, log } from "../utils.js";
+import { CORE_PLUGINS } from "../packages.js";
 
 const MARKETPLACE_SLUG = "anthropics/claude-plugins-official";
 const MARKETPLACE_NAME = "claude-plugins-official";
 
 const EXTRA_MARKETPLACES: Array<{ slug: string; marketplaceName: string; plugins: string[] }> = [
   { slug: "obra/superpowers-marketplace", marketplaceName: "superpowers-marketplace", plugins: [] },
-];
-
-export const CORE_PLUGINS = [
-  "feature-dev",
-  "code-review",
-  "pr-review-toolkit",
-  "commit-commands",
-  "claude-code-setup",
-  "claude-md-management",
-  "frontend-design",
-  "skill-creator",
-  "session-report",
-  "plugin-dev",
 ];
 
 // Per-language LSP plugins in the marketplace are README-only (no plugin.json,

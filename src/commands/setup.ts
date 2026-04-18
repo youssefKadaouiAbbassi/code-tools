@@ -482,7 +482,7 @@ async function recordJournal(env: DetectedEnvironment, tier: string | undefined)
     } catch { return []; }
   };
 
-  const { CORE_PLUGINS } = await import("../components/cc-plugins.js");
+  const { CORE_PLUGINS } = await import("../packages.js");
   const { $ } = await import("bun");
 
   let actuallyInstalled: string[] = [];
