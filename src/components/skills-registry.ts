@@ -1,6 +1,8 @@
 import { $ } from "bun";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, log } from "../utils.js";
+import type { ComponentSpec } from "./framework.js";
+import { runComponent } from "./framework.js";
 
 const SKILLS_SH_PACKAGES: Array<{ source: string; skill?: string; why: string }> = [
   {
@@ -44,6 +46,57 @@ export const skillsRegistryCategory: ComponentCategory = {
   ],
 };
 
+function skillPackageSpec(id: number, pkg: { source: string; skill?: string; why: string }): ComponentSpec {
+  const name = pkg.skill ?? pkg.source.split("/").pop() ?? pkg.source;
+  const displayName = `skills.sh: ${name}`;
+  return {
+    id,
+    name: displayName,
+    displayName,
+    description: pkg.why,
+    tier: "recommended",
+    category: "skills-registry",
+    probe: async () => ({ present: false }),
+    plan: () => ({ kind: "install", steps: [] }),
+    install: async (_env, _plan, dryRun) => {
+      const cmd = pkg.skill
+        ? `npx --yes skills add ${pkg.source} -g -y --skill ${pkg.skill}`
+        : `npx --yes skills add ${pkg.source} -g -y`;
+      if (dryRun) {
+        log.info(`[dry-run] Would run: ${cmd}  (${pkg.why})`);
+        return {
+          component: displayName,
+          status: "skipped",
+          message: `[dry-run] Would install ${pkg.source}${pkg.skill ? `@${pkg.skill}` : ""}`,
+          verifyPassed: false,
+        };
+      }
+      try {
+        const r = await $`sh -c ${cmd}`.quiet().nothrow();
+        const installed = r.exitCode === 0;
+        return {
+          component: displayName,
+          status: installed ? "installed" : "failed",
+          message: installed
+            ? `installed ${pkg.source}${pkg.skill ? `@${pkg.skill}` : ""} — ${pkg.why}`
+            : `npx skills add exited ${r.exitCode}`,
+          verifyPassed: installed,
+        };
+      } catch (err) {
+        return {
+          component: displayName,
+          status: "failed",
+          message: `install failed: ${err instanceof Error ? err.message : String(err)}`,
+          verifyPassed: false,
+        };
+      }
+    },
+    verify: async () => true,
+  };
+}
+
+export const skillsRegistrySpecs: ComponentSpec[] = SKILLS_SH_PACKAGES.map((p, i) => skillPackageSpec(50 + i, p));
+
 export async function install(_env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
   const results: InstallResult[] = [];
 
@@ -57,45 +110,8 @@ export async function install(_env: DetectedEnvironment, dryRun: boolean): Promi
     return results;
   }
 
-  for (const pkg of SKILLS_SH_PACKAGES) {
-    const name = pkg.skill ?? pkg.source.split("/").pop() ?? pkg.source;
-
-    if (dryRun) {
-      const cmd = pkg.skill
-        ? `npx --yes skills add ${pkg.source} -g -y --skill ${pkg.skill}`
-        : `npx --yes skills add ${pkg.source} -g -y`;
-      log.info(`[dry-run] Would run: ${cmd}  (${pkg.why})`);
-      results.push({
-        component: `skills.sh: ${name}`,
-        status: "skipped",
-        message: `[dry-run] Would install ${pkg.source}${pkg.skill ? `@${pkg.skill}` : ""}`,
-        verifyPassed: false,
-      });
-      continue;
-    }
-
-    try {
-      const cmd = pkg.skill
-        ? `npx --yes skills add ${pkg.source} -g -y --skill ${pkg.skill}`
-        : `npx --yes skills add ${pkg.source} -g -y`;
-      const r = await $`sh -c ${cmd}`.quiet().nothrow();
-      const installed = r.exitCode === 0;
-      results.push({
-        component: `skills.sh: ${name}`,
-        status: installed ? "installed" : "failed",
-        message: installed
-          ? `installed ${pkg.source}${pkg.skill ? `@${pkg.skill}` : ""} — ${pkg.why}`
-          : `npx skills add exited ${r.exitCode}`,
-        verifyPassed: installed,
-      });
-    } catch (err) {
-      results.push({
-        component: `skills.sh: ${name}`,
-        status: "failed",
-        message: `install failed: ${err instanceof Error ? err.message : String(err)}`,
-        verifyPassed: false,
-      });
-    }
+  for (const spec of skillsRegistrySpecs) {
+    results.push(await runComponent(spec, _env, dryRun));
   }
 
   return results;

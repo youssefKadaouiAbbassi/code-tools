@@ -3,6 +3,8 @@ import { promises as fs } from "node:fs";
 import { dirname } from "node:path";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { registerMcp, log } from "../utils.js";
+import type { ComponentSpec } from "./framework.js";
+import { runComponent } from "./framework.js";
 
 export const workflowCategory: ComponentCategory = {
   id: "workflow",
@@ -30,30 +32,39 @@ export const workflowCategory: ComponentCategory = {
   ],
 };
 
-export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
-  const results: InstallResult[] = [];
+const composioSpec: ComponentSpec = {
+  id: 35,
+  name: "composio",
+  displayName: "Composio",
+  description: "AI integration platform MCP server (requires COMPOSIO_API_KEY)",
+  tier: "optional",
+  category: "workflow",
+  probe: async () => ({ present: false }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async (env, _plan, dryRun) => {
+    try {
+      const key = process.env.COMPOSIO_API_KEY ?? "";
+      const userId = process.env.COMPOSIO_USER_ID || env.homeDir.split("/").pop() || "user";
+      let serverId = process.env.COMPOSIO_MCP_SERVER_ID ?? "";
 
-  try {
-    const key = process.env.COMPOSIO_API_KEY ?? "";
-    const userId = process.env.COMPOSIO_USER_ID || env.homeDir.split("/").pop() || "user";
-    let serverId = process.env.COMPOSIO_MCP_SERVER_ID ?? "";
+      if (dryRun) {
+        log.info("[dry-run] Would register Composio MCP (v3 endpoint, x-api-key header)");
+        return {
+          component: "Composio",
+          status: "skipped",
+          message: "[dry-run] Would register Composio HTTP MCP server",
+          verifyPassed: false,
+        };
+      }
+      if (!key) {
+        return {
+          component: "Composio",
+          status: "skipped",
+          message: "COMPOSIO_API_KEY not set — add to ~/.config/yka-code/secrets.env and re-run",
+          verifyPassed: false,
+        };
+      }
 
-    if (dryRun) {
-      log.info("[dry-run] Would register Composio MCP (v3 endpoint, x-api-key header)");
-      results.push({
-        component: "Composio",
-        status: "skipped",
-        message: "[dry-run] Would register Composio HTTP MCP server",
-        verifyPassed: false,
-      });
-    } else if (!key) {
-      results.push({
-        component: "Composio",
-        status: "skipped",
-        message: "COMPOSIO_API_KEY not set — add to ~/.config/yka-code/secrets.env and re-run",
-        verifyPassed: false,
-      });
-    } else {
       if (!serverId) {
         const body = JSON.stringify({
           name: "yka-code",
@@ -87,35 +98,44 @@ export async function install(env: DetectedEnvironment, dryRun: boolean): Promis
       }
 
       if (!serverId) {
-        results.push({
+        return {
           component: "Composio",
           status: "failed",
           message: "Could not create or resolve COMPOSIO_MCP_SERVER_ID — check that COMPOSIO_API_KEY is valid at app.composio.dev",
           verifyPassed: false,
-        });
-      } else {
-        await registerMcp("composio", {
-          transport: "http",
-          url: `https://backend.composio.dev/v3/mcp/${serverId}?user_id=${encodeURIComponent(userId)}`,
-          headers: { "x-api-key": key },
-        });
-        log.success("Composio MCP server registered");
-        results.push({
-          component: "Composio",
-          status: "installed",
-          message: `Composio MCP registered (server=${serverId.slice(0, 8)}…, user=${userId}) — use COMPOSIO_LIST_TOOLKITS to add more integrations`,
-          verifyPassed: true,
-        });
+        };
       }
-    }
-  } catch (err) {
-    results.push({
-      component: "Composio",
-      status: "failed",
-      message: `Composio MCP config failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
 
+      await registerMcp("composio", {
+        transport: "http",
+        url: `https://backend.composio.dev/v3/mcp/${serverId}?user_id=${encodeURIComponent(userId)}`,
+        headers: { "x-api-key": key },
+      });
+      log.success("Composio MCP server registered");
+      return {
+        component: "Composio",
+        status: "installed",
+        message: `Composio MCP registered (server=${serverId.slice(0, 8)}…, user=${userId}) — use COMPOSIO_LIST_TOOLKITS to add more integrations`,
+        verifyPassed: true,
+      };
+    } catch (err) {
+      return {
+        component: "Composio",
+        status: "failed",
+        message: `Composio MCP config failed: ${err instanceof Error ? err.message : String(err)}`,
+        verifyPassed: false,
+      };
+    }
+  },
+  verify: async () => true,
+};
+
+export const workflowSpecs: ComponentSpec[] = [composioSpec];
+
+export async function install(env: DetectedEnvironment, dryRun: boolean): Promise<InstallResult[]> {
+  const results: InstallResult[] = [];
+  for (const spec of workflowSpecs) {
+    results.push(await runComponent(spec, env, dryRun));
+  }
   return results;
 }

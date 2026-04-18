@@ -2,6 +2,8 @@ import { $ } from "bun";
 import type { ComponentCategory, DetectedEnvironment, InstallResult } from "../types.js";
 import { commandExists, log } from "../utils.js";
 import { installBinary } from "../packages.js";
+import type { ComponentSpec } from "./framework.js";
+import { runComponent } from "./framework.js";
 
 export const workstationCategory: ComponentCategory = {
   id: "workstation",
@@ -85,198 +87,243 @@ export const workstationCategory: ComponentCategory = {
   ],
 };
 
-export async function install(
-  env: DetectedEnvironment,
-  dryRun: boolean,
-  skippedComponents: Set<number> = new Set()
-): Promise<InstallResult[]> {
-  const results: InstallResult[] = [];
+function ghosttySpec(skipped: Set<number>): ComponentSpec {
+  return {
+    id: 36,
+    name: "ghostty",
+    displayName: "Ghostty",
+    description: "Fast, feature-rich GPU-accelerated terminal emulator",
+    tier: "recommended",
+    category: "workstation",
+    userPrompt: true,
+    probe: async () => ({ present: commandExists("ghostty") }),
+    plan: () => ({ kind: "install", steps: [] }),
+    install: async (env, _plan, dryRun) => {
+      try {
+        if (skipped.has(36)) {
+          return {
+            component: "Ghostty",
+            status: "skipped",
+            message: "Ghostty installation skipped by user choice",
+            verifyPassed: false,
+          };
+        }
+        if (commandExists("ghostty")) {
+          log.info("Ghostty already installed, skipping");
+          return {
+            component: "Ghostty",
+            status: "already-installed",
+            message: "Ghostty is already installed",
+            verifyPassed: true,
+          };
+        }
+        if (dryRun) {
+          const cmd = env.packageManager === "brew"
+            ? "brew install --cask ghostty"
+            : env.packageManager === "pacman"
+            ? "sudo pacman -S --noconfirm ghostty"
+            : "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh)\"";
+          log.info(`[dry-run] Would run: ${cmd}`);
+          return {
+            component: "Ghostty",
+            status: "skipped",
+            message: `[dry-run] Would install Ghostty via: ${cmd}`,
+            verifyPassed: false,
+          };
+        }
+        if (env.packageManager === "brew") {
+          await $`sh -c "brew install --cask ghostty"`;
+          const installed = commandExists("ghostty");
+          return {
+            component: "Ghostty",
+            status: installed ? "installed" : "failed",
+            message: installed ? "Ghostty installed successfully" : "Ghostty install ran but binary not found",
+            verifyPassed: installed,
+          };
+        }
+        if (env.packageManager === "pacman") {
+          await $`sh -c "sudo pacman -S --noconfirm ghostty"`;
+          const installed = commandExists("ghostty");
+          return {
+            component: "Ghostty",
+            status: installed ? "installed" : "failed",
+            message: installed ? "Ghostty installed successfully" : "Ghostty install ran but binary not found",
+            verifyPassed: installed,
+          };
+        }
+        log.info("Installing Ghostty via community Ubuntu installer (will prompt for sudo)...");
+        const scriptPath = `/tmp/ghostty-install-${Date.now()}.sh`;
+        const scriptUrl = "https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh";
+        const fetched = await $`curl --connect-timeout 15 --max-time 120 -fsSL ${scriptUrl} -o ${scriptPath}`.nothrow();
+        let installed = false;
+        let ranExitCode: number | undefined;
+        if (fetched.exitCode === 0) {
+          const ran = await $`bash ${scriptPath}`.nothrow();
+          ranExitCode = ran.exitCode;
+          await $`rm -f ${scriptPath}`.nothrow();
+          installed = commandExists("ghostty");
+        } else {
+          log.warn(`Could not download Ghostty installer (curl exit ${fetched.exitCode})`);
+        }
 
-  // --- Ghostty ---
-  try {
-    if (skippedComponents.has(36)) {
-      results.push({
-        component: "Ghostty",
-        status: "skipped",
-        message: "Ghostty installation skipped by user choice",
-        verifyPassed: false,
-      });
-    } else if (commandExists("ghostty")) {
-      log.info("Ghostty already installed, skipping");
-      results.push({
-        component: "Ghostty",
-        status: "already-installed",
-        message: "Ghostty is already installed",
-        verifyPassed: true,
-      });
-    } else if (dryRun) {
-      const cmd = env.packageManager === "brew"
-        ? "brew install --cask ghostty"
-        : env.packageManager === "pacman"
-        ? "sudo pacman -S --noconfirm ghostty"
-        : "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh)\"";
-      log.info(`[dry-run] Would run: ${cmd}`);
-      results.push({
-        component: "Ghostty",
-        status: "skipped",
-        message: `[dry-run] Would install Ghostty via: ${cmd}`,
-        verifyPassed: false,
-      });
-    } else if (env.packageManager === "brew") {
-      await $`sh -c "brew install --cask ghostty"`;
-      const installed = commandExists("ghostty");
-      results.push({
-        component: "Ghostty",
-        status: installed ? "installed" : "failed",
-        message: installed ? "Ghostty installed successfully" : "Ghostty install ran but binary not found",
-        verifyPassed: installed,
-      });
-    } else if (env.packageManager === "pacman") {
-      await $`sh -c "sudo pacman -S --noconfirm ghostty"`;
-      const installed = commandExists("ghostty");
-      results.push({
-        component: "Ghostty",
-        status: installed ? "installed" : "failed",
-        message: installed ? "Ghostty installed successfully" : "Ghostty install ran but binary not found",
-        verifyPassed: installed,
-      });
-    } else {
-      log.info("Installing Ghostty via community Ubuntu installer (will prompt for sudo)...");
-      const scriptPath = `/tmp/ghostty-install-${Date.now()}.sh`;
-      const scriptUrl = "https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh";
-      const fetched = await $`curl --connect-timeout 15 --max-time 120 -fsSL ${scriptUrl} -o ${scriptPath}`.nothrow();
-      let installed = false;
-      let ranExitCode: number | undefined;
-      if (fetched.exitCode === 0) {
-        const ran = await $`bash ${scriptPath}`.nothrow();
-        ranExitCode = ran.exitCode;
-        await $`rm -f ${scriptPath}`.nothrow();
-        installed = commandExists("ghostty");
-      } else {
-        log.warn(`Could not download Ghostty installer (curl exit ${fetched.exitCode})`);
-      }
-
-      if (installed) {
-        results.push({
-          component: "Ghostty",
-          status: "installed",
-          message: "Ghostty installed successfully via Ubuntu installer",
-          verifyPassed: true,
-        });
-      } else if (fetched.exitCode !== 0) {
-        results.push({
-          component: "Ghostty",
-          status: "failed",
-          message: `Failed to download installer from ${scriptUrl} (curl exit ${fetched.exitCode})`,
-          verifyPassed: false,
-        });
-      } else {
+        if (installed) {
+          return {
+            component: "Ghostty",
+            status: "installed",
+            message: "Ghostty installed successfully via Ubuntu installer",
+            verifyPassed: true,
+          };
+        }
+        if (fetched.exitCode !== 0) {
+          return {
+            component: "Ghostty",
+            status: "failed",
+            message: `Failed to download installer from ${scriptUrl} (curl exit ${fetched.exitCode})`,
+            verifyPassed: false,
+          };
+        }
         log.warn(`Ghostty installer exited with code ${ranExitCode}, manual installation required`);
-        results.push({
+        return {
           component: "Ghostty",
           status: "skipped",
           message: `Ghostty installer failed (exit ${ranExitCode}) — your distro may be unsupported; see https://ghostty.org/download`,
           verifyPassed: false,
-        });
+        };
+      } catch (err) {
+        return {
+          component: "Ghostty",
+          status: "failed",
+          message: `Ghostty install failed: ${err instanceof Error ? err.message : String(err)}`,
+          verifyPassed: false,
+        };
       }
-    }
-  } catch (err) {
-    results.push({
-      component: "Ghostty",
-      status: "failed",
-      message: `Ghostty install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+    },
+    verify: async () => commandExists("ghostty"),
+  };
+}
 
-  // --- tmux (VERIFY ONLY — installed by core) ---
-  try {
-    const installed = commandExists("tmux");
-    if (installed) {
-      let version = "unknown";
-      try {
-        const out = await $`tmux -V`.text();
-        version = out.trim();
-      } catch {
-        // ignore
+const tmuxSpec: ComponentSpec = {
+  id: 37,
+  name: "tmux",
+  displayName: "tmux",
+  description: "Terminal multiplexer (verify only — installed by core)",
+  tier: "recommended",
+  category: "workstation",
+  probe: async () => ({ present: commandExists("tmux") }),
+  plan: () => ({ kind: "install", steps: [] }),
+  install: async () => {
+    try {
+      const installed = commandExists("tmux");
+      if (installed) {
+        let version = "unknown";
+        try {
+          const out = await $`tmux -V`.text();
+          version = out.trim();
+        } catch { /* ignore */ }
+        return {
+          component: "tmux",
+          status: "already-installed",
+          message: `tmux is already installed (${version})`,
+          verifyPassed: true,
+        };
       }
-      results.push({
-        component: "tmux",
-        status: "already-installed",
-        message: `tmux is already installed (${version})`,
-        verifyPassed: true,
-      });
-    } else {
       log.warn("tmux not found — should have been installed by core layer");
-      results.push({
+      return {
         component: "tmux",
         status: "skipped",
         message: "tmux not found — install via your package manager (core responsibility)",
         verifyPassed: false,
-      });
+      };
+    } catch (err) {
+      return {
+        component: "tmux",
+        status: "failed",
+        message: `tmux verify failed: ${err instanceof Error ? err.message : String(err)}`,
+        verifyPassed: false,
+      };
     }
-  } catch (err) {
-    results.push({
-      component: "tmux",
-      status: "failed",
-      message: `tmux verify failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+  },
+  verify: async () => commandExists("tmux"),
+};
 
-  // --- chezmoi ---
-  try {
-    if (skippedComponents.has(39)) {
-      results.push({
-        component: "chezmoi",
-        status: "skipped",
-        message: "chezmoi installation skipped by user choice",
-        verifyPassed: false,
-      });
-    } else {
-      const pkg = workstationCategory.components[2].packages[0];
-      const result = await installBinary(pkg, env, dryRun);
-      results.push(result);
-    }
-  } catch (err) {
-    results.push({
-      component: "chezmoi",
-      status: "failed",
-      message: `chezmoi install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+function chezmoiSpec(skipped: Set<number>): ComponentSpec {
+  return {
+    id: 39,
+    name: "chezmoi",
+    displayName: "chezmoi",
+    description: "Dotfile manager with templating and encryption",
+    tier: "recommended",
+    category: "workstation",
+    userPrompt: true,
+    probe: async () => ({ present: commandExists("chezmoi") }),
+    plan: () => ({ kind: "install", steps: [] }),
+    install: async (env, _plan, dryRun) => {
+      try {
+        if (skipped.has(39)) {
+          return {
+            component: "chezmoi",
+            status: "skipped",
+            message: "chezmoi installation skipped by user choice",
+            verifyPassed: false,
+          };
+        }
+        const pkg = workstationCategory.components[2].packages[0];
+        return await installBinary(pkg, env, dryRun);
+      } catch (err) {
+        return {
+          component: "chezmoi",
+          status: "failed",
+          message: `chezmoi install failed: ${err instanceof Error ? err.message : String(err)}`,
+          verifyPassed: false,
+        };
+      }
+    },
+    verify: async () => commandExists("chezmoi"),
+  };
+}
 
-  // --- age (sudo-free binary install on Linux; brew on macOS) ---
-  try {
-    if (skippedComponents.has(41)) {
-      results.push({
-        component: "age",
-        status: "skipped",
-        message: "age installation skipped by user choice",
-        verifyPassed: false,
-      });
-    } else if (commandExists("age")) {
-      results.push({
-        component: "age",
-        status: "already-installed",
-        message: "age is already installed",
-        verifyPassed: true,
-      });
-    } else if (dryRun) {
-      log.info("[dry-run] Would install age from GitHub releases");
-      results.push({
-        component: "age",
-        status: "skipped",
-        message: "[dry-run] Would install age",
-        verifyPassed: false,
-      });
-    } else {
-      const agePkg = workstationCategory.components[3].packages[0];
-      if (env.packageManager === "apt" || env.packageManager === "pacman" || env.packageManager === "dnf" || env.packageManager === "brew") {
-        const result = await installBinary(agePkg, env, dryRun);
-        results.push(result);
-      } else {
+function ageSpec(skipped: Set<number>): ComponentSpec {
+  return {
+    id: 41,
+    name: "age",
+    displayName: "age",
+    description: "Simple, modern file encryption tool",
+    tier: "recommended",
+    category: "workstation",
+    userPrompt: true,
+    probe: async () => ({ present: commandExists("age") }),
+    plan: () => ({ kind: "install", steps: [] }),
+    install: async (env, _plan, dryRun) => {
+      try {
+        if (skipped.has(41)) {
+          return {
+            component: "age",
+            status: "skipped",
+            message: "age installation skipped by user choice",
+            verifyPassed: false,
+          };
+        }
+        if (commandExists("age")) {
+          return {
+            component: "age",
+            status: "already-installed",
+            message: "age is already installed",
+            verifyPassed: true,
+          };
+        }
+        if (dryRun) {
+          log.info("[dry-run] Would install age from GitHub releases");
+          return {
+            component: "age",
+            status: "skipped",
+            message: "[dry-run] Would install age",
+            verifyPassed: false,
+          };
+        }
+        const agePkg = workstationCategory.components[3].packages[0];
+        if (env.packageManager === "apt" || env.packageManager === "pacman" || env.packageManager === "dnf" || env.packageManager === "brew") {
+          return await installBinary(agePkg, env, dryRun);
+        }
         const arch = env.arch === "arm64" ? "arm64" : "amd64";
         const cmd =
           `set -e; ` +
@@ -291,22 +338,37 @@ export async function install(
           `rm -rf "$TMP"`;
         await $`sh -c ${cmd}`.nothrow();
         const installed = commandExists("age");
-        results.push({
+        return {
           component: "age",
           status: installed ? "installed" : "failed",
           message: installed ? "age installed successfully" : "age install ran but binary not found",
           verifyPassed: installed,
-        });
+        };
+      } catch (err) {
+        return {
+          component: "age",
+          status: "failed",
+          message: `age install failed: ${err instanceof Error ? err.message : String(err)}`,
+          verifyPassed: false,
+        };
       }
-    }
-  } catch (err) {
-    results.push({
-      component: "age",
-      status: "failed",
-      message: `age install failed: ${err instanceof Error ? err.message : String(err)}`,
-      verifyPassed: false,
-    });
-  }
+    },
+    verify: async () => commandExists("age"),
+  };
+}
 
+export function buildWorkstationSpecs(skipped: Set<number> = new Set()): ComponentSpec[] {
+  return [ghosttySpec(skipped), tmuxSpec, chezmoiSpec(skipped), ageSpec(skipped)];
+}
+
+export async function install(
+  env: DetectedEnvironment,
+  dryRun: boolean,
+  skippedComponents: Set<number> = new Set(),
+): Promise<InstallResult[]> {
+  const results: InstallResult[] = [];
+  for (const spec of buildWorkstationSpecs(skippedComponents)) {
+    results.push(await runComponent(spec, env, dryRun));
+  }
   return results;
 }
