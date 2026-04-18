@@ -115,6 +115,7 @@ If the user's date or version lies in the future or past beyond what the MCP can
 ## Chains with
 
 - **`coding-style`** + **`karpathy-guidelines`** — all three load at `/do` Phase 0
+- **`audit-rigor`** — load together when the research *feeds an audit/review report*. research-first owns the retrieval/citation discipline; audit-rigor adds the ≥70% confidence threshold and the SWAP/ADD/DROP output structure on top.
 - **`docfork`**, **`deepwiki`**, **`github`**, **`claude-mem`** MCPs — the research toolset
 - **Stop hook `stop-research-check.sh`** — post-hoc audit; if it fires the warning, correct in the next turn
 

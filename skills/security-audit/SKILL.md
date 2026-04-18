@@ -94,6 +94,7 @@ Present CRITICAL and HIGH together. MEDIUM and below in a collapsible list. Don'
 
 ## Chains to (synergy)
 
+- **`audit-rigor`** — load at Phase 0 alongside the base skills. Owns the output discipline (≥70% confidence, inline citations, SWAP/ADD/DROP format, delegate retrieval). Security-audit supplies the WHAT (vulns, scanners); audit-rigor supplies the HOW.
 - **`fix-bug`** — each confirmed finding routes there for the actual remediation (red test → patch → verify).
 - **`ci-hygiene`** — wire `snyk_code_scan` / `snyk_iac_scan` into CI so future regressions fail the pipeline.
 - **`doc-hygiene`** — record remediations in `SECURITY.md` / `CHANGELOG.md` under its rules.

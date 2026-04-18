@@ -58,6 +58,7 @@ Read the user's request and decide which bucket fits best:
 | "refactor", "clean up", "simplify", "extract", "dedupe", "reorganize" | **refactor-safely** |
 | "security review", "audit", "vuln", "is this safe" | **security-audit** |
 | "how does this work", "explain", "what is this repo", "onboarding" | **onboard-codebase** |
+| "review our stack", "is this the best", "compare alternatives", "what should we swap" | **Phase 3 + `Skill(audit-rigor)`** (audit/review task — load the rigor discipline, then execute with parallel `Agent()` fan-out) |
 | None match, or just a question/small tweak | **Phase 3 (fall-through)** |
 
 When ambiguous, pick based on whether existing behavior changes:
