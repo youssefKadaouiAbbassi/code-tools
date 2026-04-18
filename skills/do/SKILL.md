@@ -98,6 +98,30 @@ Upgrade to **team** (via `team-do`) when **≥2 of these** are true:
 
 When the upgrade fires, route to `team-do` via `Skill(skill: "team-do", args: "<original task>")` — it owns the stage pipeline (plan → exec → verify → fix). Otherwise, the matched single-shot skill (`ship-feature` / `fix-bug` / etc.) uses parallel `Agent()` fan-out internally where appropriate.
 
+### Phase 1c — Re-classify BEFORE executing a plan (non-negotiable)
+
+Classification at turn start can't predict what a plan will produce. The common failure mode: user asks for something that routes to `onboard-codebase` / audit / "plan X" (solo route), the plan surfaces N independent implementation phases, and then Claude *grinds through all N phases solo* because the original classification never re-fired.
+
+**Hard rule — re-run Phase 1b before executing a plan** when ANY of these are true:
+
+- A prior step (audit, `/claude-mem:make-plan`, research fan-out) produced a phased implementation plan
+- You're about to start a workflow with ≥3 independent phases / subtasks / files-to-edit
+- The work is shifting from "research / classify / plan" to "execute on the plan"
+- Your TaskList has ≥3 pending tasks that don't strictly depend on each other
+
+At this checkpoint, count:
+
+1. **Independent parcels** — phases / subtasks / files that don't block each other
+2. **Parcel cohesion** — can each parcel be described in one sentence + owned by one teammate?
+3. **Sequential dependencies** — parcel 2 requires parcel 1's output? Or can they run concurrently?
+
+If **≥3 concurrent parcels exist**, fire `team-do` unless:
+- `DEV_TEAM_WORKER=1` in env (you're already a teammate)
+- Parcels have strict `A → B → C` dependencies (truly sequential)
+- Total parcels fit in a single short turn (<15 min, <3 files)
+
+Solo-grinding a 6-phase plan is observably 3–5× slower than dispatching to a team in parallel — and loses the parallel-review benefit. Default to team when the shape warrants it.
+
 ## Phase 2 — Route via the Skill tool
 
 **Invoke the matched sub-skill using the `Skill` tool** — this is the proper activation mechanism, not a "read the SKILL.md" approximation. The sub-skill runs with full context integration and returns its results.

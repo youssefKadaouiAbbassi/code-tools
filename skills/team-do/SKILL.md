@@ -7,7 +7,24 @@ description: [yka-code] Spawns a persistent Agent Team (native TeamCreate) for w
 
 Native `TeamCreate` / `Task` / `SendMessage` pipeline, modeled on the oh-my-claudecode staged pattern but auto-invoked from `/do` (no slash command).
 
-## Fork-bomb guards — check FIRST, every invocation
+## Prerequisites — load team primitives FIRST (non-negotiable)
+
+`TeamCreate`, `TeamDelete`, `SendMessage`, `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TaskStop` are **deferred tools** in CC's default tool set — they appear in the deferred tool list but their schemas are NOT loaded at session start. Calling any of them without pre-loading returns `InputValidationError`.
+
+**First action on every team-do invocation** — load them in one ToolSearch call:
+
+```
+ToolSearch({
+  query: "select:TeamCreate,TeamDelete,SendMessage,TaskCreate,TaskUpdate,TaskList,TaskGet,TaskStop",
+  max_results: 10
+})
+```
+
+This is the #1 reason team-do gets abandoned mid-Stage-1 — `TeamCreate` fails, classifier falls back to subagent fan-out, multi-turn coordination is lost. Don't skip the preload.
+
+Only after the ToolSearch returns success do you move to the fork-bomb guards below.
+
+## Fork-bomb guards — check FIRST (after preload), every invocation
 
 **Refuse to activate if any of the following is true:**
 
