@@ -7,6 +7,121 @@ description: [yka-code] Spawns a persistent Agent Team (native TeamCreate) for w
 
 Native `TeamCreate` / `Task` / `SendMessage` pipeline, modeled on the oh-my-claudecode staged pattern but auto-invoked from `/do` (no slash command).
 
+## Canonical source (2026-04-19)
+
+Anthropic's official lifecycle doc: **`code.claude.com/docs/en/agent-teams`**. This skill defers to that spec. The critical rules from it:
+
+- *"When in doubt about whether a task warrants a team, prefer spawning a team."* (TeamCreate tool schema)
+- *"Always use the lead to clean up. Teammates should not run cleanup because their team context may not resolve correctly, potentially leaving resources in an inconsistent state."*
+- `TeamDelete` refuses to proceed if any teammate is still alive — shut them all down first, then delete.
+- `/resume` and `/rewind` do not restore in-process teammates. After resuming, spawn fresh — do NOT try to message dead members from the stale `config.json`.
+- No auto-reaping on lead crash (documented gap). Orphaned `~/.claude/teams/{name}/` dirs are cleaned by our `session-start-team-reaper.sh` hook, not by Claude.
+
+## How teams actually work — full lifecycle (per official spec)
+
+Before the opinionated stage pipeline below, the raw Anthropic model. Every rule here comes from the `TeamCreate` / `TeamDelete` / `SendMessage` tool schemas and `code.claude.com/docs/en/agent-teams`. Read this if you're about to touch any team tool.
+
+### Enablement
+
+Teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in env or `settings.json`. Check before attempting `TeamCreate` — absent flag, the tool call errors. The installer here sets the flag; if a user reports "team-do won't start", check env first.
+
+### Team = TaskList (1:1)
+
+`TeamCreate({team_name, description})` creates BOTH:
+- `~/.claude/teams/{team_name}/config.json` — the team registry (members, lead session ID, tmux panes)
+- `~/.claude/tasks/{team_name}/` — the shared task list
+
+You never `TaskCreate` in a team session without the tasks auto-landing in the team's list. Do not create a separate task dir "for this team" — the one created by `TeamCreate` is it.
+
+### Spawning teammates — pick `subagent_type` by what tools it needs
+
+Teammates are spawned via `Agent(subagent_type, team_name, name, prompt)`. The agent type determines what tools the teammate can call:
+- **Read-only types** (`Explore`, `Plan`) — research/search/planning ONLY. They cannot edit files. Never assign implementation work.
+- **Full-capability types** (`general-purpose`, `code-reviewer`, `code-architect`) — full tool access. Use for tasks that need file edits.
+- **Custom `.claude/agents/`** — check the agent's own tool restrictions before assigning.
+
+Name teammates with a **human-readable name** (e.g., `explorer`, `architect`, `reviewer`) — always use this for `SendMessage` and `TaskUpdate(owner)`. Never use the agentId (UUID).
+
+Every teammate spawn prompt MUST start with the worker preamble (see "Worker preamble" section below). Without it, teammates can recursively spawn their own teams.
+
+### Task assignment — pre-assign, don't race
+
+- Pre-assign tasks via `TaskUpdate({task_id, owner: <name>})`. Any agent can set or change ownership.
+- One task per owner at a time. No atomic-claim race.
+- Teammates prefer tasks in ID order (lowest first) when multiple are available. Earlier tasks often set up context.
+- If all available tasks are blocked, teammates should notify the lead or help unblock.
+
+Anthropic handles file-locking on task claims natively — no race-condition code needed.
+
+### Messages — push, not poll. Names, not UUIDs.
+
+- Messages from teammates are delivered **automatically** as new conversation turns. **Never poll** `TaskList` or a mailbox.
+- Plain text output is NOT visible to other agents. To communicate, you MUST call `SendMessage({to: <name>, message: "..."})`.
+- `to: "*"` broadcasts — expensive (linear in team size), use only when everyone genuinely needs the message.
+- When relaying a teammate's message to the user, do NOT quote it — the UI already rendered the original.
+- **Never send structured JSON status messages** like `{"type":"idle",...}` or `{"type":"task_completed",...}`. Plain text only. Use `TaskUpdate` for status.
+
+### Idle state — idle ≠ done
+
+A teammate going idle is NORMAL. It does not mean:
+- The teammate is done with its task (check `TaskList` for that)
+- The teammate is unavailable
+- Something is wrong
+
+It means: the teammate's turn ended and it's waiting for input. Sending a message to an idle teammate wakes it up. Do NOT react to idle notifications unless you want to assign more work or follow up.
+
+**Peer DM visibility** — when teammate A DMs teammate B, A's idle notification to the lead includes a brief summary. Informational only; no response needed.
+
+### Discovering team members
+
+Read the team config directly:
+```
+Read: ~/.claude/teams/{team_name}/config.json
+```
+
+The `members[]` array holds each teammate's `name` (what you message by), `agentId` (UUID, reference only), and `agentType`. Use `name`, never `agentId`, for all coordination.
+
+### Shutdown protocol (individual teammate)
+
+`SendMessage({to: <name>, message: {type: "shutdown_request"}})`. The teammate:
+- Finishes its current tool call
+- Responds `{type: "shutdown_response", request_id, approve: true}`  → exits
+- Or responds `{approve: false}` with a reason → stays alive (rare; honor their refusal)
+
+Approving shutdown terminates the teammate process. Don't originate `shutdown_request` unless you're actually tearing down the team.
+
+### Session-reset sharp edges
+
+- `/resume` restores the lead session but NOT the teammate processes. After resume, the lead's `config.json` still lists dead members — do NOT message them. Spawn fresh.
+- `/rewind` same behavior.
+- If a teammate's tmux pane persists after the team ends: `tmux ls` then `tmux kill-session -t <session-name>`.
+
+### Nested teams — forbidden
+
+A teammate CANNOT call `TeamCreate`. The worker preamble below enforces this via instruction. The `DEV_TEAM_WORKER=1` env var also guards the lead side of `/do`'s classifier. Violating this fork-bombs the host.
+
+### Headless / SDK mode — incompatible
+
+Teams do NOT work in `claude -p` / SDK mode. The lead hits `end_turn` while teammates run as background processes — lifecycle mismatch. If you're in headless mode, do not route to `team-do`; fall back to `Agent()` fan-out.
+
+## Shutdown contract (non-negotiable)
+
+**Every `TeamCreate` owes a `TeamDelete`.** One-to-one. No exceptions.
+
+Before you call `TeamCreate`, commit to the teardown: you own the shutdown sequence for every team you spawn, regardless of whether the stage succeeds, fails, errors mid-flight, or gets interrupted by the user. If you can't guarantee the teardown will run, you're not ready to create the team.
+
+At each stage's end (plan / exec / verify / fix), the BLOCKING order is:
+
+1. Verify via `TaskList` that every team task is `completed` (or explicitly marked `deleted` if abandoned)
+2. For EACH live teammate, `SendMessage({to: <name>, message: {type: "shutdown_request"}})`
+3. Wait up to 30s per teammate for `shutdown_response({approve: true})` (or an idle notification — both mean the teammate is down)
+4. After ALL teammates are confirmed down (or timed out), call `TeamDelete` — no params; team name comes from session context
+5. Run an orphan-scan: if `~/.claude/teams/<team_name>/` still exists, log it and proceed — the reaper hook will catch it at next session start
+
+If ANY of steps 1–4 fails, you must still call `TeamDelete` unconditionally before leaving the stage — the config-dir cleanup is more important than the graceful exit. A failed `TeamDelete` (e.g., live teammate) is the only reason to leave team state behind, and only briefly; escalate to the user if it can't be resolved.
+
+**Never create a team in Stage N without first confirming the team from Stage N-1 is torn down.** Parallel live teams violate the nested-team rule even when the outer session isn't technically a teammate.
+
 ## Prerequisites — load team primitives FIRST (non-negotiable)
 
 `TeamCreate`, `TeamDelete`, `SendMessage`, `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TaskStop` are **deferred tools** in CC's default tool set — they appear in the deferred tool list but their schemas are NOT loaded at session start. Calling any of them without pre-loading returns `InputValidationError`.
@@ -140,13 +255,9 @@ This preamble is non-negotiable — without it, a teammate can recursively spawn
 - **10-min silent → reassign.** Mark task pending, assign to another teammate; quarantine the silent one.
 - **Filter internal tasks.** Every `Agent()` spawn auto-creates an internal lifecycle task with `metadata._internal: true`. Ignore those when checking completion state.
 
-## Shutdown — BLOCKING, in strict order
+## Shutdown — see "Shutdown contract (non-negotiable)" at top
 
-1. Verify all team tasks are `completed` via `TaskList`
-2. For each live teammate, `SendMessage({to, message: {type: "shutdown_request"}})`
-3. Wait up to 30s per teammate for `shutdown_response({approve: true})`
-4. After ALL confirmed (or timed out), `TeamDelete`
-5. Run orphan-scan (project script or `pgrep` check) to catch any zombie teammate process
+The authoritative 5-step blocking sequence is in the **Shutdown contract** section near the top of this file. Every stage end runs it. No variation.
 
 ## Handoff docs — how they survive
 

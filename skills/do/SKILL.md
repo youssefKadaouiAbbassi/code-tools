@@ -82,21 +82,27 @@ Pick based on **what the work needs to get done correctly**. Not based on cost �
 | Verify → fix loop where reviewers keep prior findings across iterations | **Team** |
 | Staged pipeline with handoff docs between phases (plan → exec → verify → fix) | **Team** |
 
-Upgrade to **team** (via `team-do`) when **≥2 of these** are true:
+**Default: team.** Per Anthropic's official TeamCreate schema (as of 2026-04-19):
+> *"When in doubt about whether a task warrants a team, prefer spawning a team."* — TeamCreate tool spec; see `code.claude.com/docs/en/agent-teams`
 
-- Work spans multiple turns and teammates must retain prior-turn state to produce the right output
-- Task has a genuine debate dimension — "which approach is better", competing hypotheses, architecture decision
+Route to **team-do** when ANY ONE of these is strongly true:
+
+- Work spans multiple turns and teammates must retain prior-turn state
+- Task has a genuine debate dimension — competing approaches, architecture decision
 - Staged pipeline with handoff between phases (plan → exec → verify → fix)
 - Teammates need to message each other (not just the lead) or share a task list
-- Verify-heavy task with a bounded fix loop where reviewers keep findings across iterations
+- Verify-heavy task with a bounded fix loop across iterations
+- ≥3 independent parcels that don't block each other
 
-**Hard refusal — skip team mode if ANY of these:**
+Fall back to **solo `Agent()` fan-out** only when the task is unambiguously one-shot: single concern, single return, no coordination, no iteration — explore + lint + test + scan style. Default choice favors team; subagents are the exception, not the baseline.
+
+**Hard refusal — skip team mode regardless if ANY of these:**
 - `DEV_TEAM_WORKER=1` in env (this session is already a teammate)
 - Session was spawned with `team_name` param (you're a worker, not a lead)
-- Work is one-shot and parallel `Agent()` fan-out produces the right answer in one pass
 - The primary bucket is `onboard-codebase` (research doesn't parallelize across turns)
+- Work is truly one-shot and small (<15 min, <3 files, no iteration)
 
-When the upgrade fires, route to `team-do` via `Skill(skill: "team-do", args: "<original task>")` — it owns the stage pipeline (plan → exec → verify → fix). Otherwise, the matched single-shot skill (`ship-feature` / `fix-bug` / etc.) uses parallel `Agent()` fan-out internally where appropriate.
+When team-do fires, route via `Skill(skill: "team-do", args: "<original task>")` — it owns the stage pipeline (plan → exec → verify → fix) AND the mandatory `TeamDelete` teardown per stage. Otherwise, the matched single-shot skill (`ship-feature` / `fix-bug` / etc.) uses parallel `Agent()` fan-out internally where appropriate.
 
 ### Phase 1c — Re-classify BEFORE executing a plan (non-negotiable)
 
