@@ -44,6 +44,12 @@ Consult this before every phase. If a condition matches, add the tool to the rel
 
 ## Workflow — invoke the user's installed plugins in this exact order
 
+### Phase 0 (priority-zero) — Did this task bypass team-do?
+
+Before Phase 0 below fires, re-check: does the feature span >1 concern, touch >2 files, or involve plan + implement + review as distinct steps? If ANY yes → stop `ship-feature`, route back to `/do` Phase 1 which will route to **team-do**. `ship-feature` is for single-concern ≤2-file features; anything larger is team-do's territory.
+
+Only continue if the feature is genuinely small and bounded.
+
 ### Phase 0 — Plan-iterate (native Claude Code plan mode)
 
 Before touching `feature-dev` or any implementation, enter **Claude Code's native plan mode** via `EnterPlanMode` (or `Shift+Tab` if user-driven). In plan mode:

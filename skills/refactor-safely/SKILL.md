@@ -17,6 +17,12 @@ Load and apply the `karpathy-guidelines` skill alongside this workflow. Short ve
 4. **Goal-Driven Execution** — define the verifiable success criterion up front and loop until it passes.
 
 
+## Phase 0 — Did this refactor bypass team-do?
+
+Before anything else: does the refactor touch >2 files, involve rename across multiple modules, require a plan + refactor + review pipeline, or need verify-fix iteration? If ANY yes → stop `refactor-safely`, route back to `/do` which will pick **team-do**. `refactor-safely` is for local, single-module refactors.
+
+Only continue if scope is genuinely local.
+
 ## When to activate
 
 - User asks: "refactor X", "clean up Y", "simplify this", "extract this into …", "dedupe these"

@@ -1,6 +1,6 @@
 ---
 name: team-do
-description: [yka-code] Spawns a persistent Agent Team (native TeamCreate) for work that actually splits — multi-subsystem features, debate-worthy architecture, parallel-reviewable diffs, or verification-heavy audits. Activates when the task touches ≥3 independent files OR involves multiple specialist roles (architect + reviewer + test-engineer) OR is a competing-hypotheses decision. Lead coordinates via SendMessage, teammates work assigned tasks in parallel, handoff docs persist across stages. Uses anthropics/claude-plugins-official feature-dev agents as teammates. Refuses to activate when DEV_TEAM_WORKER=1 or when the session is already running as a teammate — nested teams are forbidden.
+description: "[yka-code] Default parallel workflow for any multi-file build, audit, refactor, review, or fix. You MUST use this whenever the task plausibly spans more than one file OR more than one concern OR benefits from parallel review / iteration — which is most tasks. Triggers on 'build', 'implement', 'add', 'ship', 'fix', 'refactor', 'audit', 'review', 'plan' when any non-trivial scope is involved. Chosen over solo Agent() fan-out by default per Anthropic's TeamCreate guidance ('when in doubt, prefer a team'). Lead coordinates via SendMessage; teammates work in parallel with handoff docs that survive compaction. Hard refusals: DEV_TEAM_WORKER=1, session already running as teammate, headless 'claude -p' mode."
 ---
 
 # team-do — auto-invoked parallel workflow

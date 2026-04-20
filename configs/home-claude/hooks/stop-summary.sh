@@ -71,9 +71,10 @@ if [[ $found_any -eq 1 ]]; then
   printf 'Review these before considering work complete.\n\n' >&2
 fi
 
-# Retrospective: did this turn do multi-file work without ever firing team-do?
-# If Write/Edit/MultiEdit hit ≥4 distinct files AND no TeamCreate/SendMessage
-# call happened, the work may have been parallelizable. Advisory only.
+# Retrospective: did this turn do parallelizable work without firing team-do?
+# Two signals: (a) ≥3 distinct edit-files from Write/Edit/MultiEdit, or
+# (b) ≥3 Agent() tool-use calls with no TeamCreate. Both mean the turn
+# should have been team-do. Advisory only.
 if command -v jq >/dev/null 2>&1; then
   transcript="$(printf '%s' "$HOOK_INPUT" | jq -r '.transcript_path // empty' 2>/dev/null || true)"
   if [[ -n "$transcript" && -f "$transcript" ]]; then
@@ -87,6 +88,13 @@ if command -v jq >/dev/null 2>&1; then
       | .input.file_path // empty
     ' 2>/dev/null | sort -u | grep -cv '^$' || echo 0)"
 
+    agent_calls="$(printf '%s' "$turn_json" | jq -r '
+      select(.type == "assistant")
+      | .message.content[]?
+      | select(.type == "tool_use" and .name == "Agent")
+      | .name
+    ' 2>/dev/null | grep -c '^Agent$' || echo 0)"
+
     team_used="$(printf '%s' "$turn_json" | jq -r '
       select(.type == "assistant")
       | .message.content[]?
@@ -94,13 +102,20 @@ if command -v jq >/dev/null 2>&1; then
       | .name
     ' 2>/dev/null | head -1 || true)"
 
-    if [[ "${edit_files:-0}" -ge 4 && -z "$team_used" ]]; then
+    if [[ -z "$team_used" && ( "${edit_files:-0}" -ge 3 || "${agent_calls:-0}" -ge 3 ) ]]; then
       {
         printf '\n=== Team-do Advisory ===\n'
-        printf 'This turn edited %s distinct files with no TeamCreate/SendMessage calls.\n' "$edit_files"
-        printf 'Consider: was this parallelizable? Next turn with ≥3 independent parcels,\n'
-        printf 're-run /do Phase 1b BEFORE executing — team-do can run phases in parallel\n'
-        printf 'and produces ~3–5x faster wallclock with built-in parallel review.\n\n'
+        if [[ "${edit_files:-0}" -ge 3 ]]; then
+          printf 'This turn edited %s distinct files with no TeamCreate/SendMessage calls.\n' "$edit_files"
+        fi
+        if [[ "${agent_calls:-0}" -ge 3 ]]; then
+          printf 'This turn spawned %s Agent() calls — that pattern IS team-do.\n' "$agent_calls"
+          printf 'team-do gives you the same parallelism PLUS: task list, SendMessage, shutdown protocol,\n'
+          printf 'handoff docs that survive compaction, and the reaper hook for cleanup.\n'
+        fi
+        printf 'Next turn with ≥3 concurrent parcels: route to team-do via /do Phase 2.\n'
+        printf 'ToolSearch preload for TeamCreate/SendMessage/TaskCreate is Phase 2''s job now;\n'
+        printf 'team-do''s entry cost is zero.\n\n'
       } >&2
     fi
   fi

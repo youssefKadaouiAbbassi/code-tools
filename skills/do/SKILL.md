@@ -11,6 +11,19 @@ Single entry point for coding work. Figures out what the user wants, applies the
 
 `Skill(skill: "using-superpowers")` — installed from `obra/superpowers@using-superpowers` via skills.sh, always-on. Establishes the rule: *if there is even a 1% chance a skill might apply, you MUST invoke it*. No inlined copy here — the upstream skill owns the enforcement text and auto-updates.
 
+### Parallel 1%-rule — team-vs-agent tool choice (non-negotiable)
+
+The skill-level 1%-rule doesn't cover the **tool** choice between `Agent()` fan-out and `team-do`. That decision is made INSIDE `/do` and `/do` sub-skills. The rule here is the same shape:
+
+**If there is even a 1% chance the work benefits from multi-turn coordination, parallel review, staged handoffs, iteration, or a verify-fix loop — route to team-do.** You do not get to decide "this is simple enough for solo Agent()" — the Phase 1b burden-of-proof test decides.
+
+Red flags that mean you're about to pick Agent when team is correct:
+- *"This is just a small change."* → run the four-question test (single concern / ≤2 files / no iteration / <15 min). ANY answer "no" → team.
+- *"The user is in a hurry."* → team-do is 3–5× faster wallclock on ≥3 parcels. Solo serial is slower.
+- *"team-do is overkill here."* → the Phase 1b test decides that, not your intuition.
+- *"I'll just spawn a quick Agent() for research."* → if you're about to run ≥3 Agent() calls in parallel, that IS what team-do is for. Use team-do.
+- *"team-do has too much ceremony."* → Phase 2 now preloads the team primitives. Entry cost is zero.
+
 ## Phase 0 — INVOKE the three base skills as tool calls (non-negotiable)
 
 Before Phase 1 classification, before any `Read`/`Grep`/`Glob`/`Bash`/`Edit`/`Write`/`WebSearch`/`WebFetch`/MCP call, **invoke these three skills via the `Skill` tool**:
@@ -57,6 +70,7 @@ Read the user's request and decide which bucket fits best:
 
 | Signal in user's message | Route to |
 |---|---|
+| Any multi-file / multi-part / multi-concern task — "build several", "fix across", "refactor + review", "audit + fix", "plan and implement", "work on N things", or ANY request that fails the four-question solo-qualification test | **team-do** (default for non-trivial work — primary bucket, not a Phase 1b override) |
 | "rough idea", "I'm thinking about", "maybe we should", "not sure yet", "figure out", "something like", or any fuzzy-scope request | **brainstorming** (produces a short spec at `tasks/specs/<date>-<topic>.md`, then re-enters Phase 1 with the spec) |
 | "help me clarify the spec", "pin down the requirements", "what am I missing", OR a spec at `tasks/specs/*.md` has ≥3 `[NEEDS CLARIFICATION]` markers | **speckit-clarify** (from `dceoy/speckit-agent-skills@speckit-clarify`, installed via skills.sh — faithful port of spec-kit's `/speckit.clarify` max-5-Q bounded loop) |
 | "build", "implement", "add", "ship", "create a new …" | **ship-feature** |
@@ -88,27 +102,32 @@ Pick based on **what the work needs to get done correctly**. Not based on cost �
 | Verify → fix loop where reviewers keep prior findings across iterations | **Team** |
 | Staged pipeline with handoff docs between phases (plan → exec → verify → fix) | **Team** |
 
-**Default: team.** Per Anthropic's official TeamCreate schema (as of 2026-04-19):
-> *"When in doubt about whether a task warrants a team, prefer spawning a team."* — TeamCreate tool spec; see `code.claude.com/docs/en/agent-teams`
+**Default route: team-do. Solo `Agent()` fan-out must justify itself.**
 
-Route to **team-do** when ANY ONE of these is strongly true:
+Per Anthropic's official TeamCreate schema: *"When in doubt about whether a task warrants a team, prefer spawning a team."* — `code.claude.com/docs/en/agent-teams`
 
-- Work spans multiple turns and teammates must retain prior-turn state
-- Task has a genuine debate dimension — competing approaches, architecture decision
-- Staged pipeline with handoff between phases (plan → exec → verify → fix)
-- Teammates need to message each other (not just the lead) or share a task list
-- Verify-heavy task with a bounded fix loop across iterations
-- ≥3 independent parcels that don't block each other
+### The burden-of-proof inversion
 
-Fall back to **solo `Agent()` fan-out** only when the task is unambiguously one-shot: single concern, single return, no coordination, no iteration — explore + lint + test + scan style. Default choice favors team; subagents are the exception, not the baseline.
+To pick **solo `Agent()` fan-out**, ALL FOUR of these must hold (not some — all):
 
-**Hard refusal — skip team mode regardless if ANY of these:**
+1. Single concern — one logical change, not a set of related changes
+2. Touches ≤2 files — counted before you start, not "it should only need 2"
+3. No iteration — no verify-fix loop, no "run tests + adjust" cycle expected
+4. Total ETA <15 min — a small, bounded operation
+
+If ANY of those four is false → **team-do**. No discretion. "This feels simple enough for solo" is a lint failure — the same rationalizations that `using-superpowers` forbids for skill invocation apply here for the team-vs-agent decision.
+
+### Hard refusal — skip team regardless
+
+Even under the default-team rule, skip team mode when ANY of these is true:
 - `DEV_TEAM_WORKER=1` in env (this session is already a teammate)
 - Session was spawned with `team_name` param (you're a worker, not a lead)
-- The primary bucket is `onboard-codebase` (research doesn't parallelize across turns)
-- Work is truly one-shot and small (<15 min, <3 files, no iteration)
+- Running in headless `claude -p` / SDK mode (teams incompatible per Anthropic docs — lifecycle mismatch)
+- All four "solo qualifying" conditions above hold (truly one-shot and small)
 
-When team-do fires, route via `Skill(skill: "team-do", args: "<original task>")` — it owns the stage pipeline (plan → exec → verify → fix) AND the mandatory `TeamDelete` teardown per stage. Otherwise, the matched single-shot skill (`ship-feature` / `fix-bug` / etc.) uses parallel `Agent()` fan-out internally where appropriate.
+Note: `onboard-codebase` is NOT in this list anymore. Anthropic recommends teams for cross-challenge research and competing-hypothesis debugging — onboarding often fits.
+
+When team-do fires, route via `Skill(skill: "team-do", args: "<original task>")` — it owns the stage pipeline AND the mandatory `TeamDelete` teardown per stage. Phase 2 below runs the ToolSearch preload for team primitives BEFORE invoking the skill, so team-do's entry cost is zero.
 
 ### Phase 1c — Re-classify BEFORE executing a plan (non-negotiable)
 
@@ -140,7 +159,7 @@ Solo-grinding a 6-phase plan is observably 3–5× slower than dispatching to a 
 
 | Matched bucket | Invocation |
 |---|---|
-| team-do (Phase 1b fired) | `Skill(skill: "team-do", args: "<task>")` |
+| team-do (default route, or Phase 1b fired) | Step 1: `ToolSearch({query: "select:TeamCreate,TeamDelete,SendMessage,TaskCreate,TaskUpdate,TaskList,TaskGet,TaskStop", max_results: 10})` — preload team primitives so team-do's entry cost is zero. Step 2: `Skill(skill: "team-do", args: "<task>")` |
 | ship-feature | `Skill(skill: "ship-feature", args: "<task>")` |
 | fix-bug | `Skill(skill: "fix-bug", args: "<task>")` |
 | refactor-safely | `Skill(skill: "refactor-safely", args: "<task>")` |

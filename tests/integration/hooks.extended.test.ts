@@ -57,6 +57,10 @@ const HOOK_PAYLOADS: Record<string, string> = {
     session_id: "s",
   }),
   "stop-summary.sh": JSON.stringify({ session_id: "s" }),
+  "stop-team-balance-check.sh": JSON.stringify({
+    transcript_path: "/tmp/none.jsonl",
+    session_id: "s",
+  }),
   "task-completed.sh": JSON.stringify({
     task_id: "t1",
     task_subject: "meaningful task subject",

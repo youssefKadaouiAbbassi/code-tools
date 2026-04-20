@@ -40,6 +40,12 @@ Load and apply the `karpathy-guidelines` skill alongside this workflow. Short ve
 
 ## Workflow
 
+### Phase 0 — Did this bug bypass team-do?
+
+Before Phase 1 fires: does the fix touch >2 files, involve plan + fix + review as distinct steps, or need a verify-fix iteration loop? If ANY yes → stop `fix-bug`, route back to `/do` which will pick **team-do**. `fix-bug` is for single-file, bounded bug fixes.
+
+Only continue if the fix is genuinely local.
+
 ### Phase 1 — Check memory first (cheap)
 **Before touching any code**, run `/claude-mem:mem-search` with the error signature / symptom. If we've solved this or a cousin before, the answer may already be in memory. This is free — always check.
 
