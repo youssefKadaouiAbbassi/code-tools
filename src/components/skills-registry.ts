@@ -26,6 +26,11 @@ const SKILLS_SH_PACKAGES: Array<{ source: string; skill?: string; why: string }>
   },
   {
     source: "obra/superpowers",
+    skill: "using-superpowers",
+    why: "Always-on 1%-rule enforcement — `if there is even a 1% chance a skill might apply, you MUST invoke it`. Load at session start to make skill invocation non-optional",
+  },
+  {
+    source: "obra/superpowers",
     skill: "brainstorming",
     why: "Socratic one-question-at-a-time spec refinement (113K installs) — upstream canonical from the Superpowers maintainer",
   },
