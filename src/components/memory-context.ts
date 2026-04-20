@@ -58,7 +58,7 @@ async function wireClaudeHudStatusline(env: DetectedEnvironment): Promise<{ wire
     const pkg = await Bun.file(pkgPath).json() as { version?: string };
     if (typeof pkg.version === "string") installerVersion = pkg.version;
   } catch { }
-  const customLine = `⚡ yka-code v${installerVersion}`;
+  const customLine = `[YKA#${installerVersion}]`;
 
   const hudConfigPath = join(env.claudeDir, "plugins", "claude-hud", "config.json");
   await mergeJsonFile(hudConfigPath, {
