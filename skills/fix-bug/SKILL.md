@@ -75,12 +75,16 @@ Before editing, spawn `pr-review-toolkit:silent-failure-hunter` on the file(s) y
 If the fix touches >1 file OR changes a public API OR crosses a module boundary, enter Claude Code's native plan mode (`EnterPlanMode` / `Shift+Tab`) with the hypothesis from Phase 4. Present the proposed fix shape — file list, approach, test strategy — to the user. Iterate until approved, then exit plan mode. Skip plan-iterate for single-file, local fixes.
 
 ### Phase 6 — Fix + test
+
+**Before writing the regression test, invoke `Skill(skill: "test-driven-development")`.** Not "consider" — call. The upstream skill owns the RED → GREEN → REFACTOR cycle; the regression test must be written red-first (failing against the current, buggy code) before any fix lands.
+
 - Apply the MINIMUM change that addresses the root cause. Resist scope creep (Karpathy: surgical changes).
 - Write a regression test that fails before the fix and passes after. If a test already exists (and was failing), make sure it passes.
 - Run the full test suite — bugs often have cascading fixes; don't break adjacent things.
 
 ### Phase 6.5 — Verification before completion
-Before claiming the fix is done, invoke `Skill("verification-before-completion")`. The regression-test red → green cycle and full test suite exit code must both be verified fresh. No "Done!" without this.
+
+**Before claiming the fix is done, invoke `Skill(skill: "verification-before-completion")`.** Non-negotiable. The regression-test red → green cycle and full test suite exit code must both be verified fresh. No "Done!" without this.
 
 ### Phase 7 — Review + commit
 - `/code-review:code-review` on the diff — a second pass in case something sneaked by
@@ -111,8 +115,8 @@ User: "The login endpoint returns 500 when the user's email has a + sign in it."
 ## Chains to (synergy)
 
 - **`brainstorming`** (UPSTREAM) — only if the user's bug report is fuzzy ("something's wrong, can't quite say what"). Normally skip.
-- **`test-driven-development`** — the regression test is written RED first, before any fix. Always.
-- **`verification-before-completion`** — Phase 6.5. Non-optional before claiming the fix works.
+- **`test-driven-development`** — See Phase 6 — invoked there as an explicit tool call, not an optional chain.
+- **`verification-before-completion`** — See Phase 6.5 — invoked there as an explicit tool call, not an optional chain.
 - **`refactor-safely`** — if the fix reveals tangled surrounding code, queue a separate refactor pass (don't fold it in).
 - **`doc-hygiene`** — if the fix invalidates a doc claim, update docs in the same PR.
 - **`security-audit`** — if the bug is a security issue (CVE, auth bypass, injection), escalate before committing.

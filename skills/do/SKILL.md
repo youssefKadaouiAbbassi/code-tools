@@ -71,7 +71,7 @@ Read the user's request and decide which bucket fits best:
 | Signal in user's message | Route to |
 |---|---|
 | Any multi-file / multi-part / multi-concern task — "build several", "fix across", "refactor + review", "audit + fix", "plan and implement", "work on N things", or ANY request that fails the four-question solo-qualification test | **team-do** (default for non-trivial work — primary bucket, not a Phase 1b override) |
-| "rough idea", "I'm thinking about", "maybe we should", "not sure yet", "figure out", "something like", or any fuzzy-scope request | **brainstorming** (produces a short spec at `tasks/specs/<date>-<topic>.md`, then re-enters Phase 1 with the spec) |
+| any non-trivial feature request ("build X", "add Y", "implement Z") that lacks an existing `tasks/specs/<date>-<topic>.md` spec file, OR fuzzy-scope language ("rough idea", "I'm thinking", "maybe we should", "not sure yet", "figure out") | **brainstorming** (produces a short spec at `tasks/specs/<date>-<topic>.md`, then re-enters Phase 1 with the spec) |
 | "help me clarify the spec", "pin down the requirements", "what am I missing", OR a spec at `tasks/specs/*.md` has ≥3 `[NEEDS CLARIFICATION]` markers | **speckit-clarify** (from `dceoy/speckit-agent-skills@speckit-clarify`, installed via skills.sh — faithful port of spec-kit's `/speckit.clarify` max-5-Q bounded loop) |
 | "build", "implement", "add", "ship", "create a new …" | **ship-feature** |
 | "broken", "error", "crash", "failing test", "bug", "doesn't work" | **fix-bug** |
@@ -88,6 +88,12 @@ When ambiguous, pick based on whether existing behavior changes:
 - Behavior changes → ship-feature or fix-bug
 - Behavior preserved → refactor-safely
 - No code change, just understanding → onboard-codebase
+
+### Done-gate (non-negotiable)
+
+Before you emit "done", "complete", "shipped", "passes", or any claim that your work is finished — AFTER any `Write` / `Edit` / `MultiEdit` tool call in the turn — you MUST invoke `Skill(skill: "verification-before-completion")`. The upstream skill runs the iron-law self-challenge (red → green verification, full test suite re-run, evidence capture) before you're allowed to claim done. The `stop-verification-check.sh` hook emits a post-hoc advisory if you skip it — treat that advisory as a correction prompt and re-invoke on the next turn.
+
+This is the parallel of `research-first` + `stop-research-check.sh`: post-hoc audit + explicit skill-call instruction + never-silent-assert.
 
 ### Phase 1b — Team vs Subagent decision
 

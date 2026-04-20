@@ -45,6 +45,9 @@ Only continue if scope is genuinely local.
 ## Workflow
 
 ### Phase 1 — Establish the behavioral baseline
+
+**Before writing any characterization test (or when one is needed to cover untested code in scope), invoke `Skill(skill: "test-driven-development")`.** Not "consider" — call. The upstream skill owns the RED → GREEN discipline for pinning current behavior before the refactor touches it.
+
 Before touching any code:
 - Run existing tests and record the pass state
 - If no tests exist for the code you'll touch, STOP. Tell the user: "No tests cover this code. Refactor-without-tests is a bug factory. Write a characterization test first (capture current behavior) or explicitly accept the risk." Wait for their call.
@@ -71,6 +74,10 @@ Re-run the same tests from Phase 1. Pass state MUST match. If any test changed, 
 
 Only proceed if the baseline matches.
 
+### Phase 5.5 — Verification before completion
+
+**Before claiming the refactor is done (or before running `git commit`), invoke `Skill(skill: "verification-before-completion")`.** Non-negotiable. The baseline-match check in Phase 5 plus full test suite exit code must be re-run and captured as fresh evidence. No "Done!" without this.
+
 ### Phase 6 — Commit
 `/commit-commands:commit` with a message like `refactor(scope): what changed and why` — the "why" is the refactor's purpose (readability, perf, deduplication), NOT just the what.
 
@@ -95,7 +102,8 @@ User: "Clean up the auth middleware — it's gotten tangled."
 
 ## Chains to (synergy)
 
-- **`test-driven-development`** — if no tests cover the target, write characterization tests FIRST (red → green captures current behavior), then refactor.
+- **`test-driven-development`** — See Phase 1 — invoked there as an explicit tool call, not an optional chain.
+- **`verification-before-completion`** — See Phase 5.5 — invoked there as an explicit tool call, not an optional chain.
 - **`fix-bug`** — if the refactor exposes a real bug (not just smell), stop refactoring and route there.
 - **`ship-feature`** — if the refactor reveals missing feature scope, don't fold it in; queue as separate ship-feature work.
 - **`doc-hygiene`** — if public API shape changes (rename, signature), doc updates land under its rules.

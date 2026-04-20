@@ -58,6 +58,10 @@ const HOOK_PAYLOADS: Record<string, string> = {
     transcript_path: "/tmp/none.jsonl",
     session_id: "s",
   }),
+  "stop-verification-check.sh": JSON.stringify({
+    transcript_path: "/tmp/none.jsonl",
+    session_id: "s",
+  }),
   "stop-summary.sh": JSON.stringify({ session_id: "s" }),
   "stop-team-balance-check.sh": JSON.stringify({
     transcript_path: "/tmp/none.jsonl",

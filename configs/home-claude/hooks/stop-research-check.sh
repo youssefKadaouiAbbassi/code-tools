@@ -6,7 +6,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_hook-stdin.sh"
 # name + version pattern; if found and no docfork/deepwiki/github MCP tool
 # was used in the same turn, emit advisory warning to stderr. Non-blocking.
 set -euo pipefail
-trap 'exit 0' ERR
+trap 'rc=$?; [ $rc -ne 0 ] && echo "[stop-research-check] rc=$rc line=$LINENO" >&2; exit 0' ERR
 
 if ! command -v jq >/dev/null 2>&1; then
   exit 0
@@ -20,9 +20,15 @@ transcript="$(printf '%s' "$HOOK_INPUT" | jq -r '.transcript_path // empty')"
 # Research MCP tool names we count as valid research.
 research_tools='mcp__docfork__search_docs|mcp__docfork__fetch_doc|mcp__deepwiki__ask_question|mcp__deepwiki__read_wiki_contents|mcp__deepwiki__read_wiki_structure|mcp__github__get_file_contents|mcp__github__list_releases|mcp__github__get_release_by_tag|mcp__github__list_commits|mcp__github__get_commit|mcp__github__list_tags|mcp__github__get_tag|mcp__github__search_issues|mcp__github__search_pull_requests|mcp__github__search_code|mcp__plugin_claude-mem_mcp-search__smart_search|mcp__plugin_claude-mem_mcp-search__search'
 
-# Find the last user-assistant turn boundary. A turn = from last user message
-# to end of file. Extract tool uses and text content from that slice.
-turn_start="$(awk '/"role": *"user"/ { start = NR } END { print (start ? start : 1) }' "$transcript")"
+# Find the last user-assistant turn boundary. Claude wraps tool_results as
+# {type:"user", message:{role:"user", content:[{type:"tool_result"}]}}, so
+# regex on "role":"user" would land on the last tool_result. Use jq to pick
+# the last record whose content has no tool_result element.
+turn_start="$(jq -s '[to_entries[] | select(
+  .value.type == "user" and
+  (.value.message.content | if type == "array" then all(.[]; .type != "tool_result") else true end)
+)] | (last.key // -1) + 1 | if . < 1 then 1 else . end' "$transcript" 2>/dev/null || echo 1)"
+: "${turn_start:=1}"
 
 turn_json="$(sed -n "${turn_start},\$p" "$transcript")"
 

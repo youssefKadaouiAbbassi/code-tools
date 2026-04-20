@@ -43,6 +43,7 @@ export const HOOK_REGISTRATIONS: HookRegistration[] = [
 
   { file: "stop-summary.sh",           event: "Stop" },
   { file: "stop-research-check.sh",    event: "Stop" },
+  { file: "stop-verification-check.sh", event: "Stop" },
   { file: "stop-team-balance-check.sh", event: "Stop" },
 
   { file: "pre-compact.sh",            event: "PreCompact" },

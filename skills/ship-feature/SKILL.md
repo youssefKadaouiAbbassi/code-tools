@@ -66,6 +66,9 @@ Skip Phase 0 only when:
 - The task is small (<30 min, <3 files) and Phase 3 fall-through applies
 
 ### Phase 1 — Plan + implement
+
+**Before writing production code for any correctness-critical path, invoke `Skill(skill: "test-driven-development")`.** Not "consider" — call. The upstream skill owns the RED → GREEN → REFACTOR cycle. The tool call is the activation; reading the skill markdown yourself doesn't count.
+
 Invoke `/feature-dev:feature-dev`. It chains internally:
 - `code-explorer` agent (from feature-dev plugin) — reads the existing codebase
 - `code-architect` agent — proposes the design
@@ -102,6 +105,9 @@ Specifically watch for:
 If any reviewer flags HIGH-confidence issues, fix them and re-invoke **only that specific reviewer** to confirm (not all 6). Low-confidence findings → present to user, don't auto-fix.
 
 ### Phase 3 — Capture + commit
+
+**Before claiming the feature complete (or before running `git commit`), invoke `Skill(skill: "verification-before-completion")`.** Non-negotiable. No "Done!" without fresh evidence captured via this skill — red → green, full test suite re-run, exit codes recorded.
+
 Before committing, invoke `/claude-md-management:revise-claude-md` if any interesting pattern emerged — capture it in CLAUDE.md so future sessions benefit.
 
 Then invoke `/commit-commands:commit-push-pr` for commit + push + PR creation in one step.
@@ -129,8 +135,8 @@ User: "Build a rate limiter for the /api/login endpoint."
 ## Chains to (synergy)
 
 - **`brainstorming`** (UPSTREAM) — if the user's request is fuzzy, brainstorm into a short spec FIRST, then re-enter this skill with the spec.
-- **`test-driven-development`** — for any core-logic / correctness-critical path: red test before implementation.
-- **`verification-before-completion`** — BEFORE claiming the feature is done. Non-optional. No "Done!" without fresh evidence.
+- **`test-driven-development`** — See Phase 1 — invoked there as an explicit tool call, not an optional chain.
+- **`verification-before-completion`** — See Phase 3 — invoked there as an explicit tool call, not an optional chain.
 - **`pre-review-checklist`** — after verification, before Phase 2 PR review (catches cheap issues).
 - **`doc-hygiene`** — user-facing README / CHANGELOG / docs updates land under its rules.
 - **`ci-hygiene`** — if CI configs are touched (new workflow, deploy step).
