@@ -4,12 +4,10 @@
 ℹ [dry-run] Would merge $REPO/configs/home-claude/settings.json into $HOME/.claude/settings.json
 ℹ [dry-run] Would copy $REPO/configs/home-claude/CLAUDE.md -> $HOME/.claude/CLAUDE.md
 ℹ [dry-run] Would create symlinks AGENTS.md -> CLAUDE.md and GEMINI.md -> CLAUDE.md
-ℹ [dry-run] Would deploy 23 hook(s) from $REPO/configs/home-claude/hooks to $HOME/.claude/hooks
+ℹ [dry-run] Would deploy 24 hook(s) from $REPO/configs/home-claude/hooks to $HOME/.claude/hooks
 ℹ [dry-run] Would deploy 17 skills from $REPO/skills to $HOME/.claude/skills
-ℹ [dry-run] Would remove 1 stale skill: setup
 ℹ [dry-run] Would deploy 4 command(s) from $REPO/commands to $HOME/.claude/commands
 ℹ [dry-run] Would deploy 0 agent(s) from $REPO/agents to $HOME/.claude/agents
-ℹ [dry-run] Would remove 3 stale subagents: do-clarifier.md, do-classifier.md, do-recorder.md
 ℹ [dry-run] Would append Claude Code env vars to $HOME/.$SHELLRC
 ℹ [dry-run] Would create $REPO/tasks/lessons.md if it does not exist
 ℹ Core tier complete.

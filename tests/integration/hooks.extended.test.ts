@@ -46,6 +46,7 @@ const HOOK_PAYLOADS: Record<string, string> = {
   "session-end.sh": JSON.stringify({ session_id: "s", stop_hook_active: false }),
   "session-start.sh": JSON.stringify({ session_id: "s" }),
   "session-start-team-reaper.sh": JSON.stringify({ session_id: "s" }),
+  "session-start-update-check.sh": JSON.stringify({ session_id: "s" }),
   "stop-failure.sh": JSON.stringify({
     error: "boom",
     error_details: "",
