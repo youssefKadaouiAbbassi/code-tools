@@ -1,0 +1,9 @@
+{
+  "source_repo": "github/spec-kit",
+  "source_path": "templates/commands/clarify.md",
+  "source_branch": "main",
+  "last_checked_sha": "c118c1c30f961921e41891df3318a2ccd2ceea54",
+  "last_checked_at": "2026-04-20",
+  "raw_url": "https://raw.githubusercontent.com/github/spec-kit/main/templates/commands/clarify.md",
+  "notes": "11-category ambiguity taxonomy, max-5-Q cap, Impact×Uncertainty priority, write-in-place-after-each-answer. We skipped the rest of spec-kit's 7-stage pipeline."
+}

@@ -30,3 +30,30 @@ Master TypeScript's advanced type system including generics, conditional types, 
 - `.claude/skills/typescript-advanced-types/SKILL.md`
 
 <!-- autoskills:end -->
+
+## Latest-first invariant (non-negotiable)
+
+**Every component this system installs MUST pull latest-available at setup-time. Pinned versions are drift. Static text copied from upstream is drift.**
+
+Concrete rules:
+
+- **CLI binaries** — install via upstream installer script (`https://.../install.sh`) or `@latest` tag. Never pin a specific version.
+- **Claude Code plugins** — always run `claude plugin marketplace update` + `claude plugin update <name>` on every `yka-code-setup` and `yka-code-setup update` invocation. `install` alone is not enough; it's install-once-freeze.
+- **`CORE_PLUGINS` list** — curated hardcoded set (we decide which Anthropic-authored plugins to install). Version freshness is handled by the `marketplace update` + `plugin update` pair on every setup, not by auto-fetching the list. Adding a new plugin is a deliberate curation decision: bump `src/packages.ts` and ship a release.
+- **Ported skills** (`brainstorming`, `verification-before-completion`, `clarify-spec`, and any future imports) — MUST have a `.upstream.json` manifest at `skills/<name>/.upstream.json` with `{url, last_known_sha}` and MUST participate in the sync-check (`scripts/sync-upstream-skills.ts`). If you port text from an upstream SKILL.md, register it.
+- **System prompt** (for the CLI itself) — `yka-code-setup update` pulls the latest binary via `git pull` (git clone) / `npm i -g @latest` (global) / re-npx (npx). Already enforced.
+- **Exceptions** — our own customizations (hooks, `/do`, `/ship-feature`, `/fix-bug`, `configs/starship.toml`, `configs/tmux.conf`) are owned text with no upstream; they don't need sync-check. But anything we copy FROM upstream DOES.
+
+If you add a new dependency to this installer, its PR must answer: *how does this pull latest?* If the answer is "it doesn't, it's pinned", it doesn't land.
+
+## Lessons learned
+
+### 2026-04-18 — CLI re-arch load-bearing facts
+- `configs/home-claude/hooks/` is the canonical home-scope hook dir (20 scripts + `_hook-guard.sh` + `_hook-stdin.sh`); `configs/project-claude/hooks/` holds only `post-edit-lint.sh` + `post-bash-test.sh` — project-scope hooks are sparse by design.
+- `AGENTS.md` at repo root, `.claude/AGENTS.md`, `configs/home-claude/AGENTS.md`, `configs/project-claude/AGENTS.md` are symlinks to their sibling `CLAUDE.md` for Gemini/Codex portability — edit `CLAUDE.md`, never `AGENTS.md`.
+- `InstallStep` / `runStep` / `runSteps` in `src/components/framework.ts` are dead code (declarative path no component uses); every asymmetric component fell back to the `install()` escape hatch — either delete or migrate one component to validate.
+- `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` strips permission-mode state from subprocess env — breaks `--dangerously-skip-permissions` propagation to `team-do` teammates. First suspect when "bypass doesn't work on workers". Dropped in 74640c8; don't reintroduce.
+
+### 2026-04-18 — Bun test harness mocking
+- `mock.module("bun", ...)` does NOT work — Bun's built-in `bun` module is runtime-resolved, not ESM-loader-resolved; `Bun.$` / `Bun.which` bypass the mock. Mutating `process.env.PATH` before `Bun.$` also fails (PATH cached at startup).
+- Only working pattern for mocking `claude` / shell subprocess in Bun tests: `Bun.spawn` a child with PATH set at spawn time pointing at a fake shell-script binary that logs argv to a file. See `tests/unit/register-mcp.test.ts` for the pattern.

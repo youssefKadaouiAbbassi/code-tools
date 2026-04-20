@@ -147,7 +147,7 @@ describe("registry/plugins installPlugin", () => {
 });
 
 describe("registry/plugins ensureMarketplace", () => {
-  test("already-registered marketplace short-circuits with ok:true", async () => {
+  test("already-registered marketplace refreshes via `marketplace update`", async () => {
     const fakeClaudeDir = join(sandbox, ".claude");
     const pluginsDir = join(fakeClaudeDir, "plugins");
     await mkdir(pluginsDir, { recursive: true });
@@ -164,7 +164,11 @@ describe("registry/plugins ensureMarketplace", () => {
     const { json, calls } = await runHarness(sandbox, body, {});
     const result = JSON.parse(json);
     expect(result.ok).toBe(true);
-    expect(calls.filter((c) => c[0] === "plugin" && c[1] === "marketplace").length).toBe(0);
+    const updateCall = calls.find((c) => c[0] === "plugin" && c[1] === "marketplace" && c[2] === "update");
+    expect(updateCall).toBeDefined();
+    expect(updateCall).toContain("already-there");
+    const addCall = calls.find((c) => c[0] === "plugin" && c[1] === "marketplace" && c[2] === "add");
+    expect(addCall).toBeUndefined();
   });
 
   test("missing marketplace triggers claude plugin marketplace add", async () => {

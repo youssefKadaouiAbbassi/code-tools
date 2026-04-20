@@ -45,10 +45,47 @@ export async function ensureMarketplace(
   slug: string,
   name: string,
 ): Promise<{ ok: boolean; exitCode?: number }> {
-  if (await marketplaceRegistered(env, name)) return { ok: true };
+  if (await marketplaceRegistered(env, name)) {
+    log.info(`Refreshing marketplace: ${name}`);
+    const refresh = await $`claude plugin marketplace update ${name}`.nothrow();
+    return { ok: refresh.exitCode === 0, exitCode: refresh.exitCode };
+  }
   log.info(`Adding marketplace: ${slug}`);
   const mkt = await $`claude plugin marketplace add ${slug}`.nothrow();
   return { ok: mkt.exitCode === 0, exitCode: mkt.exitCode };
+}
+
+export async function updatePlugin(
+  name: string,
+  marketplace: string,
+  dryRun: boolean,
+): Promise<InstallResult> {
+  const key = `${name}@${marketplace}`;
+  if (dryRun) {
+    log.info(`[dry-run] Would update ${key}`);
+    return {
+      component: name,
+      status: "skipped",
+      message: `[dry-run] Would update ${key}`,
+      verifyPassed: false,
+    };
+  }
+  if (!requireClaude()) {
+    return {
+      component: name,
+      status: "skipped",
+      message: "Claude Code CLI not found — install Claude Code first",
+      verifyPassed: false,
+    };
+  }
+  const out = await $`claude plugin update ${key}`.nothrow();
+  const ok = out.exitCode === 0;
+  return {
+    component: name,
+    status: ok ? "installed" : "failed",
+    message: ok ? `${name} updated` : `claude plugin update ${key} exited ${out.exitCode}`,
+    verifyPassed: ok,
+  };
 }
 
 export async function installPlugin(

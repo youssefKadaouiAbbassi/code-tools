@@ -4,7 +4,7 @@ import { commandExists, log } from "../utils.js";
 import { CORE_PLUGINS } from "../packages.js";
 import type { ComponentSpec } from "./framework.js";
 import { runComponent } from "./framework.js";
-import { ensureMarketplace, installPlugin, listInstalledPlugins } from "../registry/plugins.js";
+import { ensureMarketplace, installPlugin, listInstalledPlugins, updatePlugin } from "../registry/plugins.js";
 
 const MARKETPLACE_SLUG = "anthropics/claude-plugins-official";
 const MARKETPLACE_NAME = "claude-plugins-official";
@@ -128,12 +128,7 @@ function pluginSpec(id: number, name: string, slug: string, marketplaceName: str
         };
       }
       if ((await listInstalledPlugins(env)).has(key)) {
-        return {
-          component: name,
-          status: "already-installed",
-          message: `${name} already installed`,
-          verifyPassed: true,
-        };
+        return updatePlugin(name, marketplaceName, false);
       }
       return installPlugin(name, marketplaceName, false);
     },
