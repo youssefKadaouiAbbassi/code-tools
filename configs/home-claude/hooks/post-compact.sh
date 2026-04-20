@@ -32,4 +32,10 @@ fi
 
 find "$archive_dir" -type f -name '*.md' -mtime +90 -delete 2>/dev/null || true
 
+reminder=$'[yka-code] /compact just ran. Skill-load state was dropped. Re-invoke Skill("karpathy-guidelines"), Skill("coding-style"), Skill("research-first") at your next Phase 0 before any tool call. The 1% rule still applies: if any skill might apply to your next step, you MUST invoke it.'
+python3 - "$reminder" <<'PY' 2>/dev/null || true
+import json, sys
+print(json.dumps({"systemMessage": sys.argv[1]}))
+PY
+
 exit 0

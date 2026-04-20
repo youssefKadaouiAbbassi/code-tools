@@ -44,6 +44,21 @@ Consult this before every phase. If a condition matches, add the tool to the rel
 
 ## Workflow — invoke the user's installed plugins in this exact order
 
+### Phase 0 — Plan-iterate (native Claude Code plan mode)
+
+Before touching `feature-dev` or any implementation, enter **Claude Code's native plan mode** via `EnterPlanMode` (or `Shift+Tab` if user-driven). In plan mode:
+
+1. Produce the initial plan from the user's request (+ any `tasks/specs/*.md` from `brainstorming`).
+2. Present to the user. They approve, or give feedback. If feedback — iterate within plan mode (no tools fire, it's read-only).
+3. Loop until the user explicitly approves.
+4. `ExitPlanMode` into acceptEdits or default mode.
+
+This is Anthropic's own recommended workflow (Boris Cherny, 2026-01): *"I will use Plan mode, and go back and forth with Claude until I like its plan. From there, I switch into auto-accept edits mode and Claude can usually 1-shot it."* It composes with the built-in `Plan` subagent for architecture-heavy features.
+
+Skip Phase 0 only when:
+- The task already has an approved spec from `brainstorming` with enough detail that a plan is trivial
+- The task is small (<30 min, <3 files) and Phase 3 fall-through applies
+
 ### Phase 1 — Plan + implement
 Invoke `/feature-dev:feature-dev`. It chains internally:
 - `code-explorer` agent (from feature-dev plugin) — reads the existing codebase
@@ -107,7 +122,10 @@ User: "Build a rate limiter for the /api/login endpoint."
 
 ## Chains to (synergy)
 
+- **`brainstorming`** (UPSTREAM) — if the user's request is fuzzy, brainstorm into a short spec FIRST, then re-enter this skill with the spec.
 - **`tdd-first`** — for any core-logic / correctness-critical path: red test before implementation.
+- **`verification-before-completion`** — BEFORE claiming the feature is done. Non-optional. No "Done!" without fresh evidence.
+- **`pre-review-checklist`** — after verification, before Phase 2 PR review (catches cheap issues).
 - **`doc-hygiene`** — user-facing README / CHANGELOG / docs updates land under its rules.
 - **`ci-hygiene`** — if CI configs are touched (new workflow, deploy step).
 - **`security-audit`** — if the feature handles auth, crypto, uploads, secrets, or untrusted input.

@@ -2,7 +2,9 @@
   "version": 1,
   "entries": [
     "audit-rigor",
+    "brainstorming",
     "ci-hygiene",
+    "clarify-spec",
     "coding-style",
     "do",
     "doc-hygiene",
@@ -21,6 +23,7 @@
     "skill-authoring",
     "tdd-first",
     "team-do",
+    "verification-before-completion",
     "worktree-task"
   ]
 }

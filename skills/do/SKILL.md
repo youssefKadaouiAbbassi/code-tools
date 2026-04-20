@@ -7,6 +7,25 @@ description: [yka-code] Front-door entry skill for ANY coding task. Use whenever
 
 Single entry point for coding work. Figures out what the user wants, applies the principles, routes to the right workflow, and keeps the full toolkit visible so nothing gets forgotten.
 
+## EXTREMELY IMPORTANT — the 1% rule (skill invocation is not optional)
+
+If you think there is even a **1% chance** a skill might apply to what you are doing, you **MUST** invoke the skill via the `Skill` tool.
+
+**IF A SKILL APPLIES TO YOUR TASK, YOU DO NOT HAVE A CHOICE. YOU MUST USE IT.**
+
+This is not negotiable. This is not optional. You cannot rationalize your way out of this.
+
+Red flags that mean you're about to skip a skill you should be using:
+- *"This task is simple enough that I can just do it directly."* → use the skill.
+- *"The skill would be overkill here."* → the skill's own routing rules decide that, not you. Use it.
+- *"I already know how to do this."* → use the skill. The skill exists to enforce discipline you might forget.
+- *"I'll use it next time."* → there is no next time. Use it now.
+- *"The user seems in a hurry."* → the skill is faster than the rework when you get it wrong.
+
+The only legitimate reason to skip a skill is: the Phase 1 classifier clearly routes to Phase 3 fall-through AND the task is a literal one-file single-line change. Anything else — invoke.
+
+(Adapted from `obra/superpowers` `using-superpowers` skill, 2026-04-16.)
+
 ## Phase 0 — INVOKE the three base skills as tool calls (non-negotiable)
 
 Before Phase 1 classification, before any `Read`/`Grep`/`Glob`/`Bash`/`Edit`/`Write`/`WebSearch`/`WebFetch`/MCP call, **invoke these three skills via the `Skill` tool**:
@@ -53,6 +72,8 @@ Read the user's request and decide which bucket fits best:
 
 | Signal in user's message | Route to |
 |---|---|
+| "rough idea", "I'm thinking about", "maybe we should", "not sure yet", "figure out", "something like", or any fuzzy-scope request | **brainstorming** (produces a short spec at `tasks/specs/<date>-<topic>.md`, then re-enters Phase 1 with the spec) |
+| "help me clarify the spec", "pin down the requirements", "what am I missing", OR a spec at `tasks/specs/*.md` has ≥3 `[NEEDS CLARIFICATION]` markers | **clarify-spec** (bounded 5-question Impact×Uncertainty loop, writes into the spec file in place) |
 | "build", "implement", "add", "ship", "create a new …" | **ship-feature** |
 | "broken", "error", "crash", "failing test", "bug", "doesn't work" | **fix-bug** |
 | "refactor", "clean up", "simplify", "extract", "dedupe", "reorganize" | **refactor-safely** |
