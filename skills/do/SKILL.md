@@ -65,7 +65,7 @@ Read the user's request and decide which bucket fits best:
 | "security review", "audit", "vuln", "is this safe" | **security-audit** |
 | "how does this work", "explain", "what is this repo", "onboarding" | **onboard-codebase** |
 | "review our stack", "is this the best", "compare alternatives", "what should we swap" | **Phase 3 + `Skill(audit-rigor)`** (audit/review task — load the rigor discipline, then execute with parallel `Agent()` fan-out) |
-| "write a skill", "add a skill", "modify the routing", "this skill isn't firing" | **skill-authoring** (delegates eval step to `evals-first`) |
+| "write a skill", "add a skill", "modify the routing", "this skill isn't firing" | **writing-skills** (from `obra/superpowers@writing-skills`, installed via skills.sh — upstream canonical skill-authoring guide with anthropic-best-practices, persuasion-principles, worked examples) |
 | "write an eval", "regression test for a prompt", "how do I know this skill still works" | **evals-first** |
 | "is this ready to commit", "/commit", "self-review before PR", "about to push" | **pre-review-checklist** (chain BEFORE `pr-review-toolkit:review-pr`) |
 | None match, or just a question/small tweak | **Phase 3 (fall-through)** |
@@ -201,9 +201,9 @@ Your installed plugins expose these commands:
 - **Our custom — primary routes (Phase 1 classification):** `ship-feature`, `fix-bug`, `refactor-safely`, `security-audit`, `onboard-codebase`
 - **Our custom — team upgrade (Phase 1b):** `team-do` — native `TeamCreate` parallel workflow for multi-subsystem / debate / verify-heavy tasks. Never invoked directly by users; only via `/do` classifier upgrade.
 - **Our custom — complementary sub-skills (chained mid-workflow, not primary routes):**
-  - `tdd-first` — red → green → refactor for unit/integration code. Invoked by `ship-feature`/`fix-bug` when correctness matters.
-  - `evals-first` — red → green → refactor for LLM-behavior code (prompts, skills, hooks, agent instructions). Harness = `claude -p` subprocess (Claude Max, NOT Anthropic SDK). Chains with `tdd-first` when a feature has both code and prompt surface.
-  - `skill-authoring` — observed-failure-first discipline for creating or modifying SKILL.md files. Delegates eval step to `evals-first`. Owns routing-table + Phase-0-preamble consistency sweeps.
+  - `test-driven-development` — red → green → refactor for unit/integration code. Invoked by `ship-feature`/`fix-bug` when correctness matters.
+  - `evals-first` — red → green → refactor for LLM-behavior code (prompts, skills, hooks, agent instructions). Harness = `claude -p` subprocess (Claude Max, NOT Anthropic SDK). Chains with `test-driven-development` when a feature has both code and prompt surface.
+  - `writing-skills` — observed-failure-first discipline for creating or modifying SKILL.md files. Delegates eval step to `evals-first`. Owns routing-table + Phase-0-preamble consistency sweeps.
   - `pre-review-checklist` — pre-submit self-review gate. Runs before `git commit` / before `pr-review-toolkit:review-pr`. Catches cheap local issues so multi-agent review focuses on signal.
   - `doc-hygiene` — brevity + no filler on docs. Invoked when any README/CHANGELOG/CLAUDE.md is touched.
   - `ci-hygiene` — pinned versions, `--bare`, no Max-sub in CI. Invoked when `.github/workflows/*` or `Dockerfile` edited.

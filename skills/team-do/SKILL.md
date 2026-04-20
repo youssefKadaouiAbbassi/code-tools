@@ -304,4 +304,4 @@ Use a team (this skill) when:
 
 - **Chained from** `/do` — the classifier decides team-do vs single-shot path
 - **Never chains to** itself — nested teams forbidden
-- **May chain to** `release-cut` after team-verify passes with zero high-severity findings
+- **May chain to** `claude-mem:version-bump` after team-verify passes with zero high-severity findings

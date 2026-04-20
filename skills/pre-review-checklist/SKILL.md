@@ -26,7 +26,7 @@ Run these in order. Stop at the first red and fix before continuing. Don't skip 
 bun test        # or: pytest / cargo test / go test ./... / npm test
 ```
 
-If no test command is standard for the project, run whatever CI runs (check `.github/workflows/*.yml` or `justfile`). If the touched code has no tests and the change is non-trivial, escalate to `tdd-first` (add one) or `evals-first` (if it's LLM-behavior code).
+If no test command is standard for the project, run whatever CI runs (check `.github/workflows/*.yml` or `justfile`). If the touched code has no tests and the change is non-trivial, escalate to `test-driven-development` (add one) or `evals-first` (if it's LLM-behavior code).
 
 ### 2. Types clean
 
@@ -109,7 +109,7 @@ If the project's CI runs more than this checklist (integration tests, security s
 
 - **`ship-feature`** Phase 2 — this skill fires right before Phase 2's multi-agent review.
 - **`fix-bug`** final phase — before committing the fix, run this.
-- **`tdd-first`** / **`evals-first`** — if check 1 (tests) fails and coverage is weak, escalate.
+- **`test-driven-development`** / **`evals-first`** — if check 1 (tests) fails and coverage is weak, escalate.
 - **`doc-hygiene`** — if check 9 (docs) triggers, delegate the doc edits.
 - **`coding-style`** — checks 4, 6, 7, 8 are enforcements of coding-style rules 1-5.
 - **`pr-review-toolkit:review-pr`** — the post-push counterpart. Both run; this one first.

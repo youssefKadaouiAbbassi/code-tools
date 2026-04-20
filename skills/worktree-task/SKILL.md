@@ -67,4 +67,4 @@ Both hooks are supported from v2.1.74+. Install them only once worktree-first is
 
 - `ship-feature` — worktree per feature is the default entry.
 - `fix-bug` — worktree per multi-file fix.
-- `release-cut` — release branches always live in their own worktree.
+- `claude-mem:version-bump` — release branches always live in their own worktree.

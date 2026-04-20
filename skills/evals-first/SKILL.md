@@ -1,6 +1,6 @@
 ---
 name: evals-first
-description: [yka-code] Enforce eval-first discipline for LLM-touching code. Use when the task ships prompt text, skill logic, hook behavior, agent instructions, or any string a Claude Code session will read and act on. Writes a failing eval BEFORE the implementation. Red → Green loop using `claude -p` subprocess harness (Claude Max subscription, no Anthropic API key). Complements `tdd-first` (which covers unit logic) with LLM-behavioral regression coverage.
+description: [yka-code] Enforce eval-first discipline for LLM-touching code. Use when the task ships prompt text, skill logic, hook behavior, agent instructions, or any string a Claude Code session will read and act on. Writes a failing eval BEFORE the implementation. Red → Green loop using `claude -p` subprocess harness (Claude Max subscription, no Anthropic API key). Complements `test-driven-development` (which covers unit logic) with LLM-behavioral regression coverage.
 ---
 
 # Evals-first
@@ -19,7 +19,7 @@ Load this skill when the work touches ANY of:
 - An agent-instruction markdown (subagent prompts, plugin-level agents)
 - A CLAUDE.md rule that Claude must follow in sessions
 
-Skip this skill for pure TypeScript / shell / non-prompt code — that's `tdd-first` territory.
+Skip this skill for pure TypeScript / shell / non-prompt code — that's `test-driven-development` territory.
 
 ## The loop
 
@@ -104,8 +104,8 @@ Don't write 50 evals. Write 3-5 that cover the surprise failures.
 
 ## Chains with
 
-- **`tdd-first`** — covers unit/integration code; `evals-first` covers LLM behavior. Both can fire for the same feature.
-- **`skill-authoring`** — when adding or modifying a skill, `skill-authoring` delegates the eval to this skill.
+- **`test-driven-development`** — covers unit/integration code; `evals-first` covers LLM behavior. Both can fire for the same feature.
+- **`writing-skills`** — when adding or modifying a skill, `writing-skills` delegates the eval to this skill.
 - **`ship-feature`** Phase 1 — if the feature touches prompt surface, insert this skill before the implementation step.
 
 ## Hard rules

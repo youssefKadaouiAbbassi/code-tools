@@ -123,7 +123,7 @@ User: "Build a rate limiter for the /api/login endpoint."
 ## Chains to (synergy)
 
 - **`brainstorming`** (UPSTREAM) — if the user's request is fuzzy, brainstorm into a short spec FIRST, then re-enter this skill with the spec.
-- **`tdd-first`** — for any core-logic / correctness-critical path: red test before implementation.
+- **`test-driven-development`** — for any core-logic / correctness-critical path: red test before implementation.
 - **`verification-before-completion`** — BEFORE claiming the feature is done. Non-optional. No "Done!" without fresh evidence.
 - **`pre-review-checklist`** — after verification, before Phase 2 PR review (catches cheap issues).
 - **`doc-hygiene`** — user-facing README / CHANGELOG / docs updates land under its rules.

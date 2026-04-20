@@ -154,7 +154,7 @@ Commit message pattern: `ci(<scope>): <what> — <why>`. Include the rule number
 ## Chains to (synergy)
 
 - **`security-audit`** — invoke `snyk_container_scan` / `snyk_iac_scan` in new pipelines; CI is where security regressions get caught.
-- **`tdd-first`** — CI pipeline's `test` step is only meaningful if real tests exist. If the repo has none, route there first.
+- **`test-driven-development`** — CI pipeline's `test` step is only meaningful if real tests exist. If the repo has none, route there first.
 - **`doc-hygiene`** — README badges, CONTRIBUTING's "required checks" section, CHANGELOG release notes for CI changes.
 - **`refactor-safely`** — CI overhauls >5 files follow its workflow (baseline green → simplify → re-verify).
 

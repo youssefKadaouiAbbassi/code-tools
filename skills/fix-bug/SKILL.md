@@ -105,7 +105,7 @@ User: "The login endpoint returns 500 when the user's email has a + sign in it."
 ## Chains to (synergy)
 
 - **`brainstorming`** (UPSTREAM) — only if the user's bug report is fuzzy ("something's wrong, can't quite say what"). Normally skip.
-- **`tdd-first`** — the regression test is written RED first, before any fix. Always.
+- **`test-driven-development`** — the regression test is written RED first, before any fix. Always.
 - **`verification-before-completion`** — Phase 6.5. Non-optional before claiming the fix works.
 - **`refactor-safely`** — if the fix reveals tangled surrounding code, queue a separate refactor pass (don't fold it in).
 - **`doc-hygiene`** — if the fix invalidates a doc claim, update docs in the same PR.

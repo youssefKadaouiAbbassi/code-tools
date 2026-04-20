@@ -89,7 +89,7 @@ User: "Clean up the auth middleware — it's gotten tangled."
 
 ## Chains to (synergy)
 
-- **`tdd-first`** — if no tests cover the target, write characterization tests FIRST (red → green captures current behavior), then refactor.
+- **`test-driven-development`** — if no tests cover the target, write characterization tests FIRST (red → green captures current behavior), then refactor.
 - **`fix-bug`** — if the refactor exposes a real bug (not just smell), stop refactoring and route there.
 - **`ship-feature`** — if the refactor reveals missing feature scope, don't fold it in; queue as separate ship-feature work.
 - **`doc-hygiene`** — if public API shape changes (rename, signature), doc updates land under its rules.

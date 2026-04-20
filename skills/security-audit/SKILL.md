@@ -98,7 +98,7 @@ Present CRITICAL and HIGH together. MEDIUM and below in a collapsible list. Don'
 - **`fix-bug`** — each confirmed finding routes there for the actual remediation (red test → patch → verify).
 - **`ci-hygiene`** — wire `snyk_code_scan` / `snyk_iac_scan` into CI so future regressions fail the pipeline.
 - **`doc-hygiene`** — record remediations in `SECURITY.md` / `CHANGELOG.md` under its rules.
-- **`tdd-first`** — vulnerabilities get a red test (exploit proof-of-concept) before the fix ships.
+- **`test-driven-development`** — vulnerabilities get a red test (exploit proof-of-concept) before the fix ships.
 
 ## What this skill avoids
 

@@ -72,7 +72,7 @@ Dynamic mode enables `ScheduleWakeup` — Claude picks ~270s (stay in cache) or 
 
 ## Anti-patterns
 
-- **Don't loop for one-shot tasks.** "Write function X, loop until tests pass" should be `Skill("tdd-first")`, not `/loop`.
+- **Don't loop for one-shot tasks.** "Write function X, loop until tests pass" should be `Skill("test-driven-development")`, not `/loop`.
 - **Don't `/loop` when `CronCreate` fits.** Calendar schedules (`0 9 * * 1`) go in Cron; intervals (`5m`) go in `/loop`.
 - **Don't spin faster than the underlying signal.** Polling GitHub faster than ~60s risks rate limiting and reveals nothing new.
 - **Don't forget the stop condition.** Loops with no success criterion run until you notice.
@@ -86,5 +86,5 @@ Dynamic mode enables `ScheduleWakeup` — Claude picks ~270s (stay in cache) or 
 ## Chains to
 
 - `ci-hygiene` — when the loop polls CI state.
-- `release-cut` — when a loop waits for a release branch to settle.
+- `claude-mem:version-bump` — when a loop waits for a release branch to settle.
 - `fix-bug` — when a loop babysits a flaky test until it reproduces.

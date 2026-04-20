@@ -44,6 +44,16 @@ const SKILLS_SH_PACKAGES: Array<{ source: string; skill?: string; why: string }>
     skill: "speckit-clarify",
     why: "Bounded max-5-Q ambiguity-clarification loop faithful to spec-kit's /speckit.clarify — identifies underspecified areas, encodes answers back into the spec",
   },
+  {
+    source: "obra/superpowers",
+    skill: "test-driven-development",
+    why: "Red-Green-Refactor Iron Law with RED-failure-verification — upstream canonical. Replaces our tdd-first local port (which was a 60-line paraphrase)",
+  },
+  {
+    source: "obra/superpowers",
+    skill: "writing-skills",
+    why: "655-line skill-authoring guide with anthropic-best-practices.md, persuasion-principles.md, testing-skills-with-subagents.md, worked examples — upstream canonical. Replaces our skill-authoring 116-line paraphrase",
+  },
 ];
 
 export const skillsRegistryCategory: ComponentCategory = {

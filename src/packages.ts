@@ -140,16 +140,32 @@ export const DEV_CLI_PACKAGES: readonly InstallPackage[] = [
   },
 ];
 
+export function toUpgradeCommand(installCmd: string, pm: string): string {
+  if (pm === "brew") {
+    const upgradeVariant = installCmd.replace(/\bbrew install\b/g, "brew upgrade");
+    return `${upgradeVariant} 2>/dev/null || ${installCmd}`;
+  }
+  if (pm === "apt") {
+    return installCmd
+      .replace(/\bapt-get install\b/g, "apt-get install --only-upgrade")
+      .replace(/\bapt install\b/g, "apt install --only-upgrade");
+  }
+  if (pm === "pacman") {
+    return installCmd.replace(/\bpacman -S\b/g, "pacman -Syu");
+  }
+  if (pm === "dnf") {
+    return installCmd.replace(/\bdnf install\b/g, "dnf upgrade");
+  }
+  return installCmd;
+}
+
 export async function installBinary(
   pkg: InstallPackage,
   env: DetectedEnvironment,
   dryRun = false
 ): Promise<InstallResult> {
   const name = pkg.displayName || pkg.name;
-
-  if (commandExists(pkg.name)) {
-    return { component: name, status: "already-installed", message: `${name} is already installed`, verifyPassed: true };
-  }
+  const alreadyPresent = commandExists(pkg.name);
 
   let cmd: string | undefined;
   switch (env.packageManager) {
@@ -162,21 +178,32 @@ export async function installBinary(
   if (!cmd) cmd = pkg.manual;
 
   if (!cmd) {
+    if (alreadyPresent) {
+      return { component: name, status: "already-installed", message: `${name} present (no upgrade path for ${env.packageManager})`, verifyPassed: true };
+    }
     return { component: name, status: "skipped", message: `No install method for ${name} on ${env.packageManager}`, verifyPassed: false };
   }
 
+  if (alreadyPresent) {
+    cmd = toUpgradeCommand(cmd, env.packageManager);
+  }
+
   if (dryRun) {
-    return { component: name, status: "skipped", message: `[dry-run] Would run: ${cmd}`, verifyPassed: false };
+    const verb = alreadyPresent ? "upgrade" : "install";
+    return { component: name, status: "skipped", message: `[dry-run] Would ${verb} ${name}: ${cmd}`, verifyPassed: false };
   }
 
   try {
-    // Don't quiet: sudo prompts must reach the terminal.
     await $`sh -c ${cmd}`;
     const installed = commandExists(pkg.name);
     return {
       component: name,
       status: installed ? "installed" : "failed",
-      message: installed ? `${name} installed successfully` : `${name} install command ran but binary not found`,
+      message: installed
+        ? alreadyPresent
+          ? `${name} refreshed to latest`
+          : `${name} installed successfully`
+        : `${name} install command ran but binary not found`,
       verifyPassed: installed,
     };
   } catch (error) {

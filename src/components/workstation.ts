@@ -108,46 +108,49 @@ function ghosttySpec(skipped: Set<number>): ComponentSpec {
             verifyPassed: false,
           };
         }
-        if (commandExists("ghostty")) {
-          log.info("Ghostty already installed, skipping");
-          return {
-            component: "Ghostty",
-            status: "already-installed",
-            message: "Ghostty is already installed",
-            verifyPassed: true,
-          };
-        }
+        const alreadyPresent = commandExists("ghostty");
         if (dryRun) {
           const cmd = env.packageManager === "brew"
-            ? "brew install --cask ghostty"
+            ? (alreadyPresent ? "brew upgrade --cask ghostty 2>/dev/null || brew install --cask ghostty" : "brew install --cask ghostty")
             : env.packageManager === "pacman"
-            ? "sudo pacman -S --noconfirm ghostty"
+            ? (alreadyPresent ? "sudo pacman -Syu --noconfirm ghostty" : "sudo pacman -S --noconfirm ghostty")
             : "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh)\"";
-          log.info(`[dry-run] Would run: ${cmd}`);
+          const verb = alreadyPresent ? "upgrade" : "install";
+          log.info(`[dry-run] Would ${verb}: ${cmd}`);
           return {
             component: "Ghostty",
             status: "skipped",
-            message: `[dry-run] Would install Ghostty via: ${cmd}`,
+            message: `[dry-run] Would ${verb} Ghostty via: ${cmd}`,
             verifyPassed: false,
           };
         }
         if (env.packageManager === "brew") {
-          await $`sh -c "brew install --cask ghostty"`;
+          const brewCmd = alreadyPresent
+            ? "brew upgrade --cask ghostty 2>/dev/null || brew install --cask ghostty"
+            : "brew install --cask ghostty";
+          await $`sh -c ${brewCmd}`;
           const installed = commandExists("ghostty");
           return {
             component: "Ghostty",
             status: installed ? "installed" : "failed",
-            message: installed ? "Ghostty installed successfully" : "Ghostty install ran but binary not found",
+            message: installed
+              ? alreadyPresent ? "Ghostty refreshed to latest" : "Ghostty installed successfully"
+              : "Ghostty install ran but binary not found",
             verifyPassed: installed,
           };
         }
         if (env.packageManager === "pacman") {
-          await $`sh -c "sudo pacman -S --noconfirm ghostty"`;
+          const pacmanCmd = alreadyPresent
+            ? "sudo pacman -Syu --noconfirm ghostty"
+            : "sudo pacman -S --noconfirm ghostty";
+          await $`sh -c ${pacmanCmd}`;
           const installed = commandExists("ghostty");
           return {
             component: "Ghostty",
             status: installed ? "installed" : "failed",
-            message: installed ? "Ghostty installed successfully" : "Ghostty install ran but binary not found",
+            message: installed
+              ? alreadyPresent ? "Ghostty refreshed to latest" : "Ghostty installed successfully"
+              : "Ghostty install ran but binary not found",
             verifyPassed: installed,
           };
         }
