@@ -83,6 +83,7 @@ const HOOK_PAYLOADS: Record<string, string> = {
     session_id: "s",
   }),
   "user-prompt-submit.sh": JSON.stringify({ prompt: "hi", cwd: process.cwd() }),
+  "user-prompt-skill-primer.sh": JSON.stringify({ prompt: "add a function", cwd: process.cwd() }),
 };
 
 async function spawnHook(

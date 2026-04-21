@@ -30,6 +30,7 @@ export const HOOK_REGISTRATIONS: HookRegistration[] = [
   { file: "pre-research-check.sh",     event: "PreToolUse", matcher: "WebSearch|WebFetch|mcp__docfork__.*|mcp__deepwiki__.*|mcp__github__.*" },
 
   { file: "user-prompt-submit.sh",     event: "UserPromptSubmit" },
+  { file: "user-prompt-skill-primer.sh", event: "UserPromptSubmit" },
 
   { file: "post-lint-gate.sh",         event: "PostToolUse", matcher: "Write|Edit|MultiEdit" },
   { file: "post-edit-lint.sh",         event: "PostToolUse", matcher: "Write|Edit|MultiEdit" },

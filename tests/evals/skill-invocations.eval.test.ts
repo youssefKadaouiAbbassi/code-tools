@@ -46,6 +46,25 @@ function skillInvocations(uses: ToolUse[]): string[] {
     .filter(Boolean);
 }
 
+function runClaudePrompt(
+  prompt: string,
+  sandbox: string,
+  timeoutMs = 180_000,
+): { skills: string[]; stdout: string; stderr: string; exitCode: number } {
+  const proc = Bun.spawnSync(
+    [claudeBin!, "-p", prompt, "--output-format", "stream-json", "--verbose"],
+    { cwd: sandbox, stdout: "pipe", stderr: "pipe", timeout: timeoutMs },
+  );
+  const stdout = new TextDecoder().decode(proc.stdout);
+  const stderr = new TextDecoder().decode(proc.stderr);
+  return {
+    skills: skillInvocations(extractToolUses(stdout)),
+    stdout,
+    stderr,
+    exitCode: proc.exitCode ?? 1,
+  };
+}
+
 describe.skipIf(!shouldRun)("skill-invocations eval (claude -p subprocess)", () => {
   const sandbox = mkdtempSync(join(tmpdir(), "skill-eval-"));
   mkdirSync(join(sandbox, "src"), { recursive: true });
@@ -56,41 +75,45 @@ describe.skipIf(!shouldRun)("skill-invocations eval (claude -p subprocess)", () 
   });
 
   test(
-    "invokes karpathy-guidelines, coding-style, verification-before-completion, and test-driven-development",
+    "trivial task: invokes karpathy-guidelines + coding-style + verification-before-completion (TDD not required by /do Phase 3 for tiny tweaks)",
     () => {
-      const proc = Bun.spawnSync(
-        [
-          claudeBin!,
-          "-p",
-          "Add a function foo() that returns 42 to src/utils.ts, and write a bun test for it.",
-          "--output-format",
-          "stream-json",
-          "--verbose",
-        ],
-        {
-          cwd: sandbox,
-          stdout: "pipe",
-          stderr: "pipe",
-          timeout: 180_000,
-        },
+      const r = runClaudePrompt(
+        "Add a function foo() that returns 42 to src/utils.ts, and write a bun test for it.",
+        sandbox,
       );
-
-      const stdout = new TextDecoder().decode(proc.stdout);
-      const stderr = new TextDecoder().decode(proc.stderr);
-
-      if (proc.exitCode !== 0) {
-        throw new Error(
-          `claude -p exited ${proc.exitCode}. stderr:\n${stderr}\nstdout tail:\n${stdout.slice(-500)}`,
-        );
+      if (r.exitCode !== 0) {
+        throw new Error(`claude -p exited ${r.exitCode}. stderr:\n${r.stderr}\nstdout tail:\n${r.stdout.slice(-500)}`);
       }
-
-      const skills = skillInvocations(extractToolUses(stdout));
-
-      expect(skills).toContain("karpathy-guidelines");
-      expect(skills).toContain("coding-style");
-      expect(skills).toContain("verification-before-completion");
-      expect(skills).toContain("test-driven-development");
+      expect(r.skills).toContain("karpathy-guidelines");
+      expect(r.skills).toContain("coding-style");
+      expect(r.skills).toContain("verification-before-completion");
     },
     200_000,
+  );
+
+  test(
+    "non-trivial task: ALSO invokes do (routing) + test-driven-development (correctness-critical impl)",
+    () => {
+      const sub = mkdtempSync(join(tmpdir(), "skill-eval-complex-"));
+      mkdirSync(join(sub, "src"), { recursive: true });
+      try {
+        const r = runClaudePrompt(
+          "Implement a TokenBucket rate limiter class in src/rate-limiter.ts with methods acquire(n) and reset(). It must refill at a configurable rate. Include bun tests covering the refill behavior, edge cases, and concurrent acquire. This is correctness-critical infrastructure code.",
+          sub,
+          420_000,
+        );
+        if (r.exitCode !== 0) {
+          throw new Error(`claude -p exited ${r.exitCode}. stderr:\n${r.stderr}\nstdout tail:\n${r.stdout.slice(-500)}`);
+        }
+        expect(r.skills).toContain("karpathy-guidelines");
+        expect(r.skills).toContain("coding-style");
+        expect(r.skills).toContain("do");
+        expect(r.skills).toContain("test-driven-development");
+        expect(r.skills).toContain("verification-before-completion");
+      } finally {
+        rmSync(sub, { recursive: true, force: true });
+      }
+    },
+    480_000,
   );
 });
