@@ -133,6 +133,7 @@ function deployHooks(env: DetectedEnvironment, dryRun: boolean, deployMode?: Dep
     glob: "*.{sh,js,ts,py}",
     deployMode,
     dryRun,
+    alwaysOverwrite: true,
     onCopyEntry: async (target) => { await $`chmod 755 ${target}`.quiet(); },
     onDeployComplete: async ({ dstDir, deployed }) => {
       await $`chmod 755 ${dstDir}`.quiet();

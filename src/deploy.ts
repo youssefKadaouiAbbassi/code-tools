@@ -16,6 +16,7 @@ export interface DeployManagedDirectoryOptions {
   glob: string;
   deployMode?: DeployMode;
   dryRun: boolean;
+  alwaysOverwrite?: boolean;
   onCopyEntry?: (target: string) => Promise<void>;
   onDeployComplete?: (info: { dstDir: string; deployed: string[] }) => Promise<void>;
 }
@@ -81,7 +82,7 @@ async function copyEntry(
 export async function deployManagedDirectory(
   opts: DeployManagedDirectoryOptions,
 ): Promise<InstallResult> {
-  const { component, src, dst, manifestPath, kind, entryKind, glob, deployMode, dryRun, onCopyEntry, onDeployComplete } = opts;
+  const { component, src, dst, manifestPath, kind, entryKind, glob, deployMode, dryRun, alwaysOverwrite, onCopyEntry, onDeployComplete } = opts;
   const labels = LABELS[kind];
 
   const current = await scanSourceEntries(src, glob, kind);
@@ -114,7 +115,7 @@ export async function deployManagedDirectory(
     const deployedEntries: string[] = [];
     for (const name of current) {
       const target = join(dst, name);
-      if (!previousSet.has(name) && (await resolveWrite(target, deployMode)) === "skip") {
+      if (!alwaysOverwrite && !previousSet.has(name) && (await resolveWrite(target, deployMode)) === "skip") {
         skipped++;
         continue;
       }

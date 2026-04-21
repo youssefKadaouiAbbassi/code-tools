@@ -267,6 +267,55 @@ describe("deployManagedDirectory — add-on-top semantics", () => {
     expect(snapshot).toBe("USER-OWNED");
   });
 
+  test("alwaysOverwrite forces overwrite of orphan files not in previous manifest under add-on-top/skip", async () => {
+    await seedFiles(src, ["a.md"]);
+    await seedFiles(dst, ["a.md"]);
+    await fs.writeFile(join(dst, "a.md"), "ORPHAN-FROM-EARLIER-COPY\n");
+
+    const writelogDir = join(workDir, "addontop");
+    await fs.mkdir(writelogDir, { recursive: true });
+
+    const result = await deployManagedDirectory(
+      commandsOpts({
+        alwaysOverwrite: true,
+        deployMode: {
+          mode: "add-on-top",
+          addOnTopLogPath: writelogDir,
+          conflictPolicy: "skip",
+          claudeDir: dst,
+        },
+      }),
+    );
+
+    expect(result.status).toBe("installed");
+    expect(result.message).not.toContain("skipped");
+    expect(await fs.readFile(join(dst, "a.md"), "utf-8")).toBe("content:a.md\n");
+  });
+
+  test("without alwaysOverwrite, orphan files get skipped under add-on-top/skip (documents the old default behavior)", async () => {
+    await seedFiles(src, ["a.md"]);
+    await seedFiles(dst, ["a.md"]);
+    await fs.writeFile(join(dst, "a.md"), "ORPHAN-FROM-EARLIER-COPY\n");
+
+    const writelogDir = join(workDir, "addontop");
+    await fs.mkdir(writelogDir, { recursive: true });
+
+    const result = await deployManagedDirectory(
+      commandsOpts({
+        deployMode: {
+          mode: "add-on-top",
+          addOnTopLogPath: writelogDir,
+          conflictPolicy: "skip",
+          claudeDir: dst,
+        },
+      }),
+    );
+
+    expect(result.status).toBe("installed");
+    expect(result.message).toContain("skipped 1");
+    expect(await fs.readFile(join(dst, "a.md"), "utf-8")).toBe("ORPHAN-FROM-EARLIER-COPY\n");
+  });
+
   test("previously managed entries bypass add-on-top skip check", async () => {
     await seedFiles(src, ["a.md"]);
     await deployManagedDirectory(commandsOpts());
