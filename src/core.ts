@@ -97,7 +97,6 @@ type ManagedTreeSpec = {
 
 const MANAGED_TREES: ManagedTreeSpec[] = [
   { component: "orchestration-skills", kind: "skills", dir: "skills", entryKind: "directory", glob: "*/SKILL.md" },
-  { component: "user-commands", kind: "commands", dir: "commands", entryKind: "file", glob: "*.md" },
   { component: "user-agents", kind: "agents", dir: "agents", entryKind: "file", glob: "*.md" },
 ];
 

@@ -1,6 +1,8 @@
 ---
-description: [yka-code] Show which yka-code hooks are currently enabled vs disabled (state file + YKA_HOOKS_BYPASS env var).
+name: hooks-list
+description: "[yka-code] Show which yka-code hooks are currently enabled vs disabled (state file + YKA_HOOKS_BYPASS env var)."
 allowed-tools: Bash
+disable-model-invocation: true
 ---
 
 # /hooks-list

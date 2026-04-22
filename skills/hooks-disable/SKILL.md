@@ -1,7 +1,9 @@
 ---
-description: [yka-code] Disable a yka-code hook persistently (state file). Use "all" for kill-switch. Usage: /hooks-disable pre-pr-gate
+name: hooks-disable
+description: "[yka-code] Disable a yka-code hook persistently (state file). Use \"all\" for kill-switch. Usage: /hooks-disable pre-pr-gate"
 allowed-tools: Bash
 argument-hint: <hook-name> | all
+disable-model-invocation: true
 ---
 
 # /hooks-disable
