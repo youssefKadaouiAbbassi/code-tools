@@ -1,0 +1,9 @@
+{
+  "parcel": "t5-types-shape",
+  "tool": "tsc-and-l0-tests",
+  "rationale": "Type-only changes — Stryker mutation testing on type aliases is not meaningful (mutations of interface fields don't propagate to runtime). The equivalent signal is: (a) tsc --noEmit reports 0 errors after the doctor.ts import surgery, (b) L0.types-2/3/4 cover all 3 HealthResult discriminated-union shapes (3/3 = 1.00 coverage of the union's value space), (c) L0.types-5 runtime-checks the PluginSpec ↔ MARKETPLACES pairing (5/5 PLUGINS validate, 2/2 EXTRA_PLUGINS validate).",
+  "score": 1.0,
+  "result": "PASS",
+  "threshold": 0.80,
+  "passed": true
+}

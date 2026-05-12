@@ -157,18 +157,23 @@ Any gate fail → re-enter Phase 4 with the failing report. Two consecutive fail
 ## Phase 6 — Ship
 
 ```bash
-# 1. protect-mcp signs every PreToolUse/PostToolUse → .forge/receipts/*.json (auto via hooks).
-#    Each receipt MUST be a JSON object with {payload, signature} where signature is a hex
-#    Ed25519 sig (128 chars). If the protect-mcp hook didn't fire, fall back to writing one
-#    signed receipt per gate using `npx @veritasacta/verify sign-payload`.
+# 1. forge generates one signed receipt per verify gate using `@veritasacta/verify sign-payload`.
+#    Each receipt is `{payload, signature}` with a hex Ed25519 sig (128 chars).
+#
+#    Granularity: GATE-LEVEL, not per-tool-call. The runbook signs the JSON artifact each gate
+#    (derive-kind / pbt-verify / mutation-gate / browser-verify / tdd-guard) writes to .forge/.
+#    Per-tool-call signing requires upstream protect-mcp PreToolUse/PostToolUse hooks; the
+#    upstream package's current hooks (v0.5.5) shell out to obsolete `evaluate`/`sign`
+#    subcommands, so forge's install.ts deliberately leaves those hook files empty (no-op,
+#    not active-overwrite). When upstream protect-mcp v2 ships working hooks, those receipts
+#    will land in .forge/receipts/ alongside the gate-level ones — no SKILL.md change needed.
 mkdir -p .forge/receipts
-test -n "$(ls .forge/receipts/*.json 2>/dev/null)" || \
-  for gate in derive-kind pbt-verify mutation-gate browser-verify tdd-guard; do
-    [ -f .forge/$gate*.json ] && \
-      npx -y @veritasacta/verify sign-payload \
-        --in .forge/$gate*.json \
-        --out .forge/receipts/$gate.json
-  done
+for gate in derive-kind pbt-verify mutation-gate browser-verify tdd-guard; do
+  [ -f .forge/$gate*.json ] && \
+    npx -y @veritasacta/verify sign-payload \
+      --in .forge/$gate*.json \
+      --out .forge/receipts/$gate.json
+done
 
 # 2. Verify chain offline:
 npx -y @veritasacta/verify .forge/receipts/
@@ -220,7 +225,7 @@ git fsck --strict
 - pbt-verify PARTIAL with FAILED counterexample on any pure-fn parcel
 - browser-verify console error or 4xx/5xx on any UI parcel
 - tdd-guard non-test edit while red
-- protect-mcp Cedar denial in chain
+- protect-mcp Cedar denial in chain (only fires when upstream protect-mcp v2 ships working PreToolUse hooks; today this gate is a no-op pending hook-level signing)
 - `npx @veritasacta/verify` fails on chain
 - stub-warn flagged stub reaching merge
 

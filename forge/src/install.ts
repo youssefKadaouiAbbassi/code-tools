@@ -110,10 +110,14 @@ export async function run(args: string[]): Promise<void> {
     else { console.log(`  ✗ ${p} FAILED`); fail++; }
   }
 
-  // 3b. Configure claude-hud + install claude-mem (claude-mem fix runs `claude plugin marketplace update` which re-pulls protect-mcp's broken hooks).
+  // 3b. Configure claude-hud + install claude-mem.
+  // Order: claude-mem fix runs `claude plugin marketplace update`, which re-pulls
+  // protect-mcp's obsolete-evaluate/sign hooks. We MUST re-stub them AFTER that refresh.
   await configureClaudeHud();
   await installClaudeMem();
-  // 3c. Stub protect-mcp hooks LAST (must be after any marketplace refresh).
+  // 3c. Stub protect-mcp hooks LAST.
+  // Workaround for upstream wshobson/agents — protect-mcp v0.5.5 hooks call removed
+  // `evaluate` / `sign` subcommands. Remove this call when upstream ships working hooks.
   await regenerateProtectMcpHooks();
 
   // 3c. Post-install hook smoke — surface upstream regressions immediately
@@ -159,9 +163,11 @@ async function registerKMP(mp: { name: string; repo: string }, loc: string, now:
 
 
 export async function regenerateProtectMcpHooks(): Promise<void> {
-  // Stub the broken upstream protect-mcp hooks (calls obsolete `evaluate`/`sign` subcommands).
-  // Walk every marketplaces/* AND cache/* dir to find every copy — upstream registers under
-  // multiple marketplace names (e.g. claude-code-workflows + wshobson-agents).
+  // Blank every protect-mcp/hooks.json copy because upstream protect-mcp v0.5.5 invokes
+  // `evaluate` / `sign` subcommands that no longer exist (see wshobson/agents protect-mcp).
+  // Walk both marketplaces/* AND cache/* dirs — upstream registers under multiple marketplace
+  // names (claude-code-workflows + wshobson-agents). Merge-not-overwrite is a planned
+  // follow-up; tracked in .forge/audit/deferred.md (L0.audit-1 spec is skipped, not gone).
   const { readdirSync, statSync } = await import("node:fs");
   const roots = [
     join(HOME, ".claude", "plugins", "marketplaces"),
@@ -332,9 +338,11 @@ async function installPrereqs(): Promise<void> {
 
 async function installClaudeMem(): Promise<void> {
   // claude-mem is a self-installing Claude Code plugin (NOT a stdio MCP package).
-  // Quirk: it writes its marketplace.json to .agents/plugins/ with name="claude-mem-local",
-  // but registers itself in known_marketplaces under key "thedotmack". Claude Code looks for
-  // marketplace.json at .claude-plugin/ — so we copy + rewrite name to bridge the mismatch.
+  // Workaround for upstream thedotmack/claude-mem packaging: it writes its marketplace.json
+  // to `.agents/plugins/` with `name="claude-mem-local"`, but registers in
+  // `known_marketplaces` under key `thedotmack`. Claude Code looks for marketplace.json at
+  // `.claude-plugin/`. We copy + rewrite name to bridge the mismatch.
+  // Remove this fix once upstream ships marketplace.json at the canonical path.
   const mpDir = join(HOME, ".claude", "plugins", "marketplaces", "thedotmack");
   if (!existsSync(mpDir)) {
     process.stdout.write("  → installing claude-mem plugin ... ");

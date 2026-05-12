@@ -1,0 +1,81 @@
+{
+  "persona": "meta-judge",
+  "model": "opus",
+  "confidence_threshold": 80,
+  "dropped_count": 1,
+  "dropped": [
+    { "id": "pta-06", "confidence": 78, "reason": "below threshold but borderline — file as nice-to-have not must_fix" }
+  ],
+  "summary": {
+    "total_findings": 30,
+    "after_filter": 29,
+    "by_severity": { "critical": 1, "high": 14, "medium": 12, "low": 3 },
+    "by_parcel": {
+      "p01-cli-stack": 2,
+      "p02-cli-ux": 2,
+      "p03-code-quality": 16,
+      "p04-market-compare": 1,
+      "p05-pipeline-design": 6,
+      "p06-distribution-install": 3
+    }
+  },
+  "verdict": "BLOCK-DO-NOT-AUTO-SHIP",
+  "reasoning": "29 findings cleared the ≥80 confidence filter, including 1 critical (sfh-04: audit chain stub) and 14 high. The brief asked to 'make it the best as of May 11, 2026' — this is fundamentally a refactor + redesign brief, not a parcel-and-go feature. Auto-proceeding to Phase 4 would re-implement large portions of forge/src and the SKILL.md pipeline blindly. The right move is to surface the must_fix list, group into shippable redesign tracks, and let the user pick which tracks to execute next.",
+  "must_fix_grouped_by_track": {
+    "track-1-audit-chain-honesty": {
+      "priority": "CRITICAL — ship-blocker for the product's marketing claim",
+      "findings": ["sfh-04", "ca-04"],
+      "scope": "Either (a) document that gate-level signing is the real path and per-tool-call signing requires upstream protect-mcp v2; or (b) write a 10-line PreToolUse bash hook that hashes + signs and STOP stubbing protect-mcp/hooks.json. Today's behaviour is 'we ship a signed audit chain' in README + 'we blank the upstream signer' in install.ts. Pick one.",
+      "effort": "S — 1 day"
+    },
+    "track-2-cli-foundation": {
+      "priority": "HIGH — every other CLI improvement depends on this",
+      "findings": ["tda-02", "tda-05", "cs-03", "cs-05", "ca-05", "cr-06"],
+      "scope": "Adopt citty (or commander v13). Replace ad-hoc argv.indexOf with a real subcommand router. Single VERSION import from package.json. Replace spawnSync with Bun.$. Add @clack/prompts (or picocolors) for TTY-aware output. Add --output json everywhere. Estimated -200 LOC net, +typed args + auto-help + completions.",
+      "effort": "M — 2-3 days"
+    },
+    "track-3-install-decomposition": {
+      "priority": "HIGH — install.ts is the riskiest file in the repo",
+      "findings": ["cs-01", "cs-02", "cr-02", "cr-04", "sfh-01", "sfh-02", "sfh-03", "tda-04"],
+      "scope": "Split install.ts into src/install/{prereqs,marketplaces,settings,plugins,post-install,smoke}.ts each ≤80 LOC. Per-step error tracking. Write an install-manifest.json. Symmetrize uninstall. Extract walkFiles helper (used 4×). Centralize runClaude(args, {required}).",
+      "effort": "M — 3-4 days"
+    },
+    "track-4-distribution-reach": {
+      "priority": "HIGH — biggest barrier to adoption",
+      "findings": ["cr-01", "cr-03"],
+      "scope": "(a) Stop auto-sudo-installing 8 system tools without consent — gate behind --yes-prereqs or interactive prompt or `forge install --prereqs-only`. (b) Ship 5 platform binaries via `bun build --compile --target=...` + GitHub Releases + brew tap. The npm package becomes a downloader (esbuild-style). Windows support becomes plausible.",
+      "effort": "L — 1 week including CI release pipeline"
+    },
+    "track-5-types-and-shape": {
+      "priority": "MEDIUM — fast win, blocks tier-2 hardening",
+      "findings": ["tda-01", "tda-03", "ca-03", "sfh-05", "cs-04"],
+      "scope": "Define ClaudeSettings interface in src/types.ts. Template-literal type for PluginSpec. Discriminated union for HealthResult. Delete dead-expression in logLine; replace with appendFile. Use crypto.randomUUID in writeJsonAtomic.",
+      "effort": "S — 1 day"
+    },
+    "track-6-pipeline-redesign": {
+      "priority": "MEDIUM — the pipeline works but is expensive",
+      "findings": ["pta-03", "pta-04", "pta-05", "cr-08", "ca-04"],
+      "scope": "Tiered council (small diff → 2 personas sonnet; medium → 4 sonnet + opus judge; large → 6 opus). Per-path mutation threshold map. LLM-driven PBT property derivation instead of static-table. Multi-heuristic browser-verify dev-server detection.",
+      "effort": "L — 1-2 weeks"
+    },
+    "track-7-tests-on-the-CLI-itself": {
+      "priority": "MEDIUM — test coverage is plugin-heavy, src-thin",
+      "findings": ["pta-01", "pta-02"],
+      "scope": "Add tests/unit/{install,doctor,uninstall,update,cli,state}.test.ts with mocked fs + injected ctx. Convert L3 to cassette-replay mode for PR CI; gate live `claude -p` runs behind CI=live for weekly cron.",
+      "effort": "M — 3-4 days"
+    },
+    "track-8-strategic-positioning": {
+      "priority": "STRATEGIC — affects whether forge has a moat in 2027",
+      "findings": ["cr-07"],
+      "scope": "Pick a lane vs. Codex/OpenCode/Aider/Claude Code. Recommendation: forge does NOT chase TUI parity (lost cause vs. opencode + codex). Forge OWNS the 'audit-grade shipping pipeline' niche — CI integration, GitHub Actions, scheduled runs, signed compliance trails, mutation+PBT enforcement. Drop ambitions toward interactive mode; double down on '/forge:forge' as a pipeline orchestrator that runs unattended.",
+      "effort": "—  (decision, not code)"
+    },
+    "track-9-doc-cleanups": {
+      "priority": "LOW — quick wins",
+      "findings": ["cr-05", "ca-01", "ca-02"],
+      "scope": "Link every workaround comment to upstream issue. Fix cli.ts file docstring stale claims. PR the claude-mem marketplace.json fix upstream.",
+      "effort": "S — 0.5 day"
+    }
+  },
+  "next_action_recommended": "Surface these 9 tracks to the user. Ask which tracks they want forge to schedule for Phase 4 in this session vs. defer to follow-up runs. Track-1 (audit chain honesty) is the only one I'd push as 'do now regardless' — it's a documentation+10-line-hook fix and removes a credibility hazard."
+}

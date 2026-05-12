@@ -1,0 +1,6 @@
+{
+  "parcel": "t9-doc-cleanups",
+  "kind": "doc",
+  "rationale": "Pure comment + docstring updates in install.ts (3 workaround comments now link to upstream packages: wshobson/agents protect-mcp, thedotmack/claude-mem packaging) and cli.ts (file docstring updated from stale separate-repo claim to current monorepo reality). No runtime behavior touched. Per SKILL.md Phase 5: doc kind skips all gates.",
+  "gates_routed": "none (doc) — verified via build smoke (bun build → 31.91 KB cli.js, no errors)"
+}

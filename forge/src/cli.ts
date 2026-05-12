@@ -1,9 +1,11 @@
 #!/usr/bin/env bun
 /**
  * forge — Claude Code plugin orchestrator CLI.
- * Distributes via npm (`bunx @yka/forge@latest <cmd>`); the actual plugin lives at
- * github.com/youssefKadaouiAbbassi/forge and is installed by `forge install`.
+ * Monorepo: this CLI ships from `forge/` inside `code-tools`. It distributes to npm
+ * as `@yka/forge` (`bunx @yka/forge@latest <cmd>`) and to Claude Code as the `forge`
+ * plugin via the forge marketplace registered by `forge install`.
  */
+export {};
 
 const VERSION = "0.0.1";
 

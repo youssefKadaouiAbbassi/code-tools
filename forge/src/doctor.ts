@@ -6,6 +6,7 @@ import {
   SETTINGS_PATH, KMP_PATH, HOME, FORGE_VERSION,
   readJson, ensureForgeHome,
 } from "./state";
+import type { ClaudeSettings } from "./types";
 
 const FAKE_EVENTS: Record<string, string> = {
   UserPromptSubmit: '{"hook_event_name":"UserPromptSubmit","prompt":"hi","session_id":"abc","cwd":"/tmp"}',

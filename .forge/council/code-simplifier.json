@@ -1,0 +1,61 @@
+{
+  "persona": "code-simplifier",
+  "model": "opus",
+  "findings": [
+    {
+      "id": "cs-01",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts",
+      "lines": "1-372",
+      "confidence": 93,
+      "severity": "high",
+      "title": "install.ts has 7 distinct responsibilities in one 372-line module — split into composable phases",
+      "evidence": "(1) flag parsing, (2) prereq installer, (3) marketplace registration, (4) wrapper script generation, (5) settings.json patching, (6) plugin install loop, (7) post-install fixes (claude-hud + claude-mem + protect-mcp stub) + (8) hook smoke. Single `run()` function is 130 lines. No dependency injection — testing requires real filesystem + real `claude` binary.",
+      "fix": "Split into `src/install/{prereqs,marketplaces,settings,plugins,post-install,smoke}.ts`, each exporting `async function step(ctx: InstallContext): Promise<StepResult>`. `run()` becomes a 20-line orchestrator. Each step independently testable with an in-memory fs."
+    },
+    {
+      "id": "cs-02",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/doctor.ts, install.ts",
+      "lines": "doctor 244-296 + install 249-298",
+      "confidence": 95,
+      "severity": "high",
+      "title": "checkHooksOnly and runHookSmoke are 90% identical copy-paste",
+      "evidence": "Both: stack-walk for hooks.json files, filter by enabledPlugins, parse JSON, iterate hooks per event, spawnSync each with fake payload, check exit + stderr for known error patterns, count failures. FAKE / FAKE_EVENTS constants are duplicated verbatim. ~50 LOC duplicated.",
+      "fix": "Extract `hookSmoke(opts: { silent: boolean }): { failures: HookFailure[] }` to src/lib/hook-smoke.ts. install + doctor both call it. Define FAKE_EVENTS once."
+    },
+    {
+      "id": "cs-03",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts, doctor.ts, uninstall.ts, update.ts",
+      "lines": "everywhere spawnSync is used",
+      "confidence": 90,
+      "severity": "medium",
+      "title": "spawnSync usage is verbose and error-handling is inconsistent — Bun.$ is shorter, safer, and the codebase already requires Bun",
+      "evidence": "`spawnSync('claude', ['plugin','install', spec], { encoding: 'utf8', timeout: 60_000, stdio: 'pipe' })` repeated 15+ times with slight variations. Some pass `shell: '/bin/bash'`, some don't. Some check r.status, some check r.stdout, some check r.stderr. The project's own CLAUDE.md (L18) mandates `prefer Bun.$ over raw exec in TypeScript`.",
+      "fix": "Replace with `await Bun.$\\`claude plugin install ${spec}\\`.quiet().nothrow()` — returns {stdout, stderr, exitCode}. Add `runClaude(args, opts)` helper for the `claude` binary specifically (handles required vs optional, timeout, stderr-as-warning). Cuts ~150 LOC."
+    },
+    {
+      "id": "cs-04",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/state.ts",
+      "lines": "65-69 (writeJsonAtomic)",
+      "confidence": 88,
+      "severity": "low",
+      "title": "writeJsonAtomic reimplements what Bun.write + node:fs/promises.rename already give you, and the tmp file name includes pid (not unique under concurrent runs)",
+      "evidence": "`tmp = ${path}.tmp.${process.pid}` — two forge runs from the same pid (impossible, but) or one run with cluster fork would collide. Stripe et al. use `crypto.randomUUID()` to suffix. Also writeFile+rename is fine but Bun has `Bun.write(path, JSON.stringify(...))` which is one call.",
+      "fix": "`const tmp = path + '.tmp.' + crypto.randomUUID()` (or use `proper-lockfile` for a real cross-process lock if you actually care). Move atomic-write logic to one place; share across all *.json writes."
+    },
+    {
+      "id": "cs-05",
+      "parcel": "p02-cli-ux",
+      "file": "forge/src/cli.ts, install.ts, doctor.ts",
+      "lines": "all println sites",
+      "confidence": 80,
+      "severity": "low",
+      "title": "Hand-rolled '1/3', '2/3', '✓ ...' prints duplicate spinners + progress-bar functionality from picocolors / @clack/prompts",
+      "evidence": "11 occurrences of `'X/Y stepname...'` across install.ts, update.ts. Manual emoji prefix logic (`'✓'` `'✗'` `'⚠'` `'−'`). No fall-through to plain text in TTY=false. No color when piped. No progress on long-running steps (8 sudo installs run silent).",
+      "fix": "`@clack/prompts` (~30kb) gives `intro/outro/step/spinner/log.success/log.error` with TTY-aware fallbacks. Replaces ~40 println sites. Or stay minimal with `picocolors` (~3kb) + a 20-line `step()` helper."
+    }
+  ]
+}

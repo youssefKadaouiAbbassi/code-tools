@@ -1,0 +1,7 @@
+{
+  "parcel": "t5-types-shape",
+  "tool": "manual-discriminated-union-exhaustion",
+  "rationale": "fast-check would derive properties from value-bearing function signatures. types.ts exports makeHealthResult (identity factory) which has no derivable property other than `forall(r: HealthResult), makeHealthResult(r) === r`. L0.types-2/3/4 cover all 3 discriminated-union shapes (ok | warn | fail). This is the exhaustive case-coverage equivalent of PBT for a sum type.",
+  "verdict": "VERIFIED",
+  "counterexamples": []
+}

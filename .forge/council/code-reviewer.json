@@ -1,0 +1,94 @@
+{
+  "persona": "code-reviewer",
+  "model": "opus",
+  "findings": [
+    {
+      "id": "cr-01",
+      "parcel": "p06-distribution-install",
+      "file": "forge/src/install.ts",
+      "lines": "302-330",
+      "confidence": 92,
+      "severity": "high",
+      "title": "Auto-running sudo + curl|sh for syft/grype/cargo is hostile UX and violates 'least surprise'",
+      "evidence": "installPrereqs() runs without user consent: `curl ... rustup.rs | sh -s -- -y`, `curl ... syft/install.sh | sudo sh`, `curl ... grype/install.sh | sudo sh`. The README mentions sudo may be prompted, but `bunx @yka/forge@latest install` triggers 8 separate install scripts. Two require sudo. No --confirm-prereqs flag, no preview, no opt-out per-tool. This is the single biggest reason a serious team will refuse to adopt forge — auditors will block it.",
+      "fix": "Default: print a plan ('Will install: jj via cargo, syft via root, grype via root, ...') and ask interactively (prompt). --yes for non-interactive. Better: provide a Docker / devbox.json / nix manifest that bundles all 8 tools, document `forge install --in-docker` as the recommended path. Reference: [Codex distributes a single Rust binary; OpenCode ships a tarball + install.sh under one user-installable path](https://github.com/sst/opencode)."
+    },
+    {
+      "id": "cr-02",
+      "parcel": "p06-distribution-install",
+      "file": "forge/src/install.ts, forge/src/uninstall.ts",
+      "lines": "install 36-118 + uninstall 21-67",
+      "confidence": 90,
+      "severity": "high",
+      "title": "Install/uninstall are not symmetric — every install action needs a matching uninstall, but `regenerateProtectMcpHooks`, `configureClaudeHud`, `installClaudeMem`, prereq tools are all uninstall-orphans",
+      "evidence": "Install: 8 sudo installs + claude-mem plugin + claude-hud config + protect-mcp stubs + 5 marketplaces + forge bin + extraKnownMarketplaces entries. Uninstall: removes forge marketplaces + statusLine + FORGE_HOME + calls `npx claude-mem uninstall`. NOT removed: claude-hud config dir (~/.claude/plugins/claude-hud/config.json), protect-mcp stub overwrites (the stubbed hooks.json files stay stubbed forever), the 8 sudo-installed system tools (cargo, jj, syft, grype, opengrep, apprise, mutmut, uv), the FORGE_WRAPPER bin dir is removed via FORGE_HOME but $PATH entries pointing there are never cleaned. After `forge uninstall` users still have leftover system mutations.",
+      "fix": "Install writes a manifest (`~/.claude/forge/install-manifest.json`) listing every artifact touched + a revert hook per artifact (delete, restore-from-backup, leave-with-warning). Uninstall replays the manifest in reverse. Standard pattern in homebrew, asdf, mise."
+    },
+    {
+      "id": "cr-03",
+      "parcel": "p06-distribution-install",
+      "file": "forge/src/install.ts, README.md",
+      "lines": "package.json engines, README L20",
+      "confidence": 95,
+      "severity": "high",
+      "title": "Distribution is npm-only (Bun-required), zero Windows path, no Homebrew tap, no native binary",
+      "evidence": "package.json `bin: ./dist/cli.js` is a Bun-built minified JS. engines specify bun >=1.0.0. README says 'Node's npx works too' but the wrapper script is `exec bunx -y @yka/forge@latest` — it shells to bunx unconditionally. Windows users have no path (Bun has Windows builds, but the prereq installer assumes POSIX `command -v`, sh -c, sudo). Compare: opencode ships via 5 channels (curl|bash, npm, brew, nix, docker), codex distributes prebuilt binaries via GitHub Releases for darwin/linux/windows/arm64 + npm wrapper.",
+      "fix": "Use `bun build --compile --target=bun-linux-x64,bun-linux-aarch64,bun-darwin-x64,bun-darwin-aarch64,bun-windows-x64` to produce 5 standalone binaries per release. Publish each to a GitHub Release. The npm package becomes a thin downloader (like esbuild's). Add a `brew install yka/tap/forge` formula. Reference: [Bun single-file executable docs](https://github.com/oven-sh/bun/blob/main/docs/bundler/executables.mdx)."
+    },
+    {
+      "id": "cr-04",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts",
+      "lines": "161-193",
+      "confidence": 88,
+      "severity": "medium",
+      "title": "Filesystem walk for hooks.json is duplicated 3× and re-implements `find -name` inline",
+      "evidence": "regenerateProtectMcpHooks (L172-186), runHookSmoke in install.ts (L262-273), checkHooksOnly in doctor.ts (L244-254), checkProtectMcpStubbed in doctor.ts (L131-148) — four near-identical iterative readdir loops with the same shape: stack=[root]; while(pop) { readdir; if dir push; else if matches collect }. Each has its own try-catch swallow style.",
+      "fix": "Extract `walkFiles(roots: string[], match: (path: string) => boolean): string[]` in state.ts. Or use Bun's `Glob` (`new Bun.Glob('**/hooks.json').scan(root)`) which is what Bun explicitly recommends. Eliminates ~80 LOC of duplication."
+    },
+    {
+      "id": "cr-05",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts",
+      "lines": "352-365",
+      "confidence": 90,
+      "severity": "medium",
+      "title": "fixClaudeMemMarketplaceJson is a name-rewrite hack that fights upstream — brittle, fails silently when upstream restructures",
+      "evidence": "Comment admits: 'claude-mem writes marketplace.json to .agents/plugins/ but registers as `claude-mem-local`; we copy + rewrite name to `thedotmack`'. The fix depends on three load-bearing strings (`.agents/plugins/marketplace.json`, `.claude-plugin/marketplace.json`, `thedotmack`) all upstream-controlled by a third party.",
+      "fix": "Either (a) upstream the fix to thedotmack/claude-mem with a PR (preferred — 'latest-first' invariant in CLAUDE.md demands it), or (b) document this as a known fragile dependency with a CI test that detects when the upstream layout changes (catches breakage at PR time, not at install time)."
+    },
+    {
+      "id": "cr-06",
+      "parcel": "p02-cli-ux",
+      "file": "forge/src/cli.ts, install.ts, doctor.ts",
+      "lines": "install L19-22, L98-99, doctor L60-69",
+      "confidence": 87,
+      "severity": "medium",
+      "title": "No machine-readable output mode beyond `doctor --json` — install/update/uninstall emit only emoji-laden free-form text",
+      "evidence": "install prints '🔨 forge install' '1/3 adding marketplaces...' '✓ forge ← ...'. No --json. CI/CD that wants to verify install can only grep emojis. doctor has --json but install doesn't. Compare: gh has --json for nearly every command; opencode emits structured events over its HTTP/SSE protocol.",
+      "fix": "Add `--output json` global flag. Every printline is also pushed as `{event: 'marketplace.added', name, repo, status}` to stdout when --output json. CI integration becomes trivial."
+    },
+    {
+      "id": "cr-07",
+      "parcel": "p04-market-compare",
+      "file": "README.md, SCOREBOARD.md",
+      "lines": "README L22-30",
+      "confidence": 92,
+      "severity": "high",
+      "title": "Discoverability gap — forge has no TUI, no streaming output, no model selector, no provider abstraction, no telemetry opt-out — all table stakes in May 2026",
+      "evidence": "Per the agentic-CLI landscape (Codex Rust+ratatui TUI, OpenCode TUI+VS Code extension+desktop, Aider terminal-native), 2026 baselines: streaming token output, TUI scrollback, /clear, /undo, mid-task interrupt, multi-provider routing, cost dashboard, telemetry opt-out. Forge has none — it's a shell-script driver over `claude -p`. Codex CLI: 92.1% on swe-bench, full TUI, sandbox profiles, cloud tasks. OpenCode: HTTP server + 4 frontends. Forge: README L82 'Stop hook fires apprise dispatch' is the only feedback channel.",
+      "fix": "Strategic call. Either (a) commit to forge being a non-interactive pipeline orchestrator (then double down: no TUI ambition, instead invest in CI integration, cron/scheduled runs, GitHub Actions, Slack notifier) and own the 'audit-grade shipping pipeline' niche, or (b) build a TUI that visualizes the 6-phase DAG live (ink/ratatui equivalent). The current middle ground — emoji prints + claude-hud statusline — competes with nothing. Reference: [Every AI Coding CLI in 2026](https://dev.to/soulentheo/every-ai-coding-cli-in-2026-the-complete-map-30-tools-compared-4gob), [Codex execution modes](https://github.com/openai/codex)."
+    },
+    {
+      "id": "cr-08",
+      "parcel": "p05-pipeline-design",
+      "file": "forge/plugin/skills/mutation-gate/SKILL.md",
+      "lines": "88-92",
+      "confidence": 85,
+      "severity": "medium",
+      "title": "Universal 0.80 mutation threshold ignores Stryker's own guidance — high-value modules need 0.90+, glue code 0.50",
+      "evidence": "SKILL.md L88-92 hardcodes `bc -l '$SCORE >= 0.80'` for every parcel regardless of kind, codebase area, or test maturity. Stryker docs explicitly recommend per-package thresholds: hot business logic → 0.85+, infrastructure adapters → 0.65, generated code → skip. Forge's flat 0.80 either blocks legit PRs (over-strict on adapter code) or under-protects (under-strict on crypto/auth). Combined-with-PBT papers from 2023+ note that 0.80 is a stale industry-folklore number.",
+      "fix": "Read threshold from `.forge/mutation-config.json` per path glob: `{ 'src/crypto/**': 0.90, 'src/cli/**': 0.75, 'src/glue/**': 0.65, default: 0.80 }`. Default stays 0.80 for safety; teams configure once. Reference: [property-based mutation testing 2023](https://www.tuwien.at/doc/res/wp-content/uploads/2023/05/property-based-mutation-testing.pdf), [Stryker thresholds docs]."
+    }
+  ]
+}

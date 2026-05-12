@@ -1,0 +1,77 @@
+{
+  "brief": "Review forge/ in this repo. CLI stack, UX, code quality, market-standards comparison as of May 11, 2026. Make it the best thing.",
+  "target": "forge/",
+  "mode": "audit-only-stop-after-phase-3",
+  "rationale": "User asked for a review + 'make it the best'. Phase 4-6 would rewrite the forge CLI itself blindly. We stop after Council (Phase 3), surface must_fix and a redesign plan, and ask the user which parcels to schedule for Phase 4-5.",
+  "parcels": [
+    {
+      "id": "p01-cli-stack",
+      "claim": "Audit the runtime + dependency stack of forge CLI: Bun-only bin, hyparquet sole dep, no arg parser, manual spawnSync glue. Compare to May-2026 CLI norms (commander/cac/clipanion, @clack/prompts, citty/unjs).",
+      "paths": ["forge/src/cli.ts", "forge/src/install.ts", "forge/src/update.ts", "forge/src/uninstall.ts", "forge/src/doctor.ts", "forge/src/state.ts", "forge/src/statusline.ts", "forge/package.json"],
+      "deps": [],
+      "research": ["docfork:bun", "docfork:commander", "docfork:cac", "docfork:citty", "docfork:@clack/prompts", "websearch:'best Node/Bun CLI framework 2026'", "claude-mem:prior CLI choices"]
+    },
+    {
+      "id": "p02-cli-ux",
+      "claim": "UX audit: help text, error surfaces, interactive vs non-interactive modes, no progress spinners (raw spawnSync), no JSON output mode beyond doctor, emoji-heavy stdout, no --yes flag for confirmations, no --dry-run, no shell completion. Compare with Claude Code, Cursor CLI, aider, OpenCode, Codex CLI conventions.",
+      "paths": ["forge/src/cli.ts", "forge/src/install.ts", "forge/src/doctor.ts", "forge/README.md"],
+      "deps": [],
+      "research": ["websearch:'aider CLI UX 2026'", "websearch:'OpenCode SST CLI'", "websearch:'Codex CLI'", "websearch:'Cursor CLI'", "deepwiki:Aider-AI/aider", "deepwiki:sst/opencode", "deepwiki:anthropics/claude-code"]
+    },
+    {
+      "id": "p03-code-quality",
+      "claim": "Code-quality review of forge/src: 372-line install.ts mixing 7 concerns; spawnSync error paths swallowed; node_modules walk for hooks.json is O(n) recursive readdir; logLine reads-then-appends entire file each call; backup() never pruned; uninstall.ts duplicates state from install.ts; no shared types; doctor.ts has 11 inlined checks no abstraction.",
+      "paths": ["forge/src/install.ts", "forge/src/doctor.ts", "forge/src/uninstall.ts", "forge/src/update.ts", "forge/src/state.ts"],
+      "deps": [],
+      "research": ["docfork:bun:Bun.spawn", "docfork:bun:Bun.file", "websearch:'typescript CLI architecture 2026 best practices'"]
+    },
+    {
+      "id": "p04-market-compare",
+      "claim": "Market-standard comparison: forge differentiates on 6-phase pipeline + signed audit chain + verify gates. Competing in May 2026: Claude Code (Anthropic baseline), aider (terminal-native), Cursor CLI, OpenCode (SST, plugin-based), Codex CLI (OpenAI), Gemini CLI, Continue, Aider-arch tools. What does forge uniquely own? What's table stakes it lacks (TUI, streaming output, MCP-first config, sandbox profiles, telemetry opt-out, cost dashboard)?",
+      "paths": ["forge/README.md", "forge/SCOREBOARD.md", "forge/plugin/skills/forge/SKILL.md"],
+      "deps": [],
+      "research": ["websearch:'Claude Code 2026 features'", "websearch:'OpenCode SST 2026'", "websearch:'aider 2026 release'", "websearch:'agentic CLI comparison 2026'", "deepwiki:sst/opencode", "deepwiki:Aider-AI/aider", "deepwiki:openai/codex"]
+    },
+    {
+      "id": "p05-pipeline-design",
+      "claim": "Design audit of the 6-phase pipeline itself: hardcoded mutation threshold 0.80 across all parcels (Stryker's own docs warn against universal cutoffs); council = 6 personas in parallel + meta-judge is expensive (~6x tokens) but mandatory even for typos; pbt-verify generates from a static property table — flawed for non-canonical fns; protect-mcp signing flow has fallback to npx @veritasacta/verify but real upstream signing is stubbed out (`regenerateProtectMcpHooks` writes empty hooks.json); audit-chain enforcement is theoretical when receipts are skill-generated not hook-signed.",
+      "paths": ["forge/plugin/skills/forge/SKILL.md", "forge/plugin/skills/mutation-gate/SKILL.md", "forge/plugin/skills/pbt-verify/SKILL.md", "forge/src/install.ts"],
+      "deps": [],
+      "research": ["docfork:stryker-mutator/stryker-js:thresholds", "docfork:fast-check:property-derivation", "websearch:'protect-mcp ed25519 audit chain'", "deepwiki:nizos/tdd-guard"]
+    },
+    {
+      "id": "p06-distribution-install",
+      "claim": "Install/distribution flow: prereq installer auto-runs sudo (cargo, syft, grype, rustup install), assumes Linux/macOS, no Windows path, no idempotency check on already-installed tools beyond `command -v`, claude-mem patches marketplace.json by name-rewriting (brittle), 15 plugins/4 marketplaces all pinned to upstream HEAD (works against the project's stated 'latest-first' but no version pinning fallback).",
+      "paths": ["forge/src/install.ts", "forge/src/state.ts"],
+      "deps": [],
+      "research": ["docfork:bun:installer", "websearch:'CLI installer Windows support 2026'", "deepwiki:thedotmack/claude-mem"]
+    },
+    {
+      "id": "t1-audit-chain",
+      "claim": "Track 1 — audit-chain honesty (CRITICAL). README L82-area + SKILL.md Phase 6 claim 'protect-mcp signs every PreToolUse/PostToolUse → .forge/receipts/*.json'. Reality: forge's regenerateProtectMcpHooks() overwrites the protect-mcp hooks.json with {hooks:{}}, and signing is actually done gate-level by npx @veritasacta/verify sign-payload. Decision: TAKE PATH (b) — rewrite README + SKILL.md to honestly describe gate-level signing only; change regenerateProtectMcpHooks() to merge-not-overwrite so upstream signer's hooks stay alive if/when v2 ships. This matches meta-judge's recommendation ('do now regardless — documentation+10-line-hook fix') and avoids speculative Ed25519 hook implementation. Resolves: sfh-04 (critical), ca-04 (high).",
+      "paths": ["forge/src/install.ts", "forge/README.md", "forge/plugin/skills/forge/SKILL.md"],
+      "deps": [],
+      "research": ["claude-mem:prior protect-mcp findings", "deepwiki:wshobson/agents (protect-mcp upstream)"],
+      "must_fix": ["sfh-04", "ca-04"],
+      "kind_hint": "config-and-doc"
+    },
+    {
+      "id": "t5-types-shape",
+      "claim": "Track 5 — types and shape (MEDIUM). Add ClaudeSettings interface to forge/src/types.ts (NEW FILE). Replace every Record<string, any/unknown> settings.json access in install.ts/doctor.ts/uninstall.ts/update.ts with the typed shape. Add template-literal PluginSpec type so plugin names like 'foo@marketplace-name' are validated against MARKETPLACES at compile time. Replace HealthResult plain-object union with discriminated union {kind:'ok'}|{kind:'warn',lines:string[]}|{kind:'fail',lines:string[]}. Delete the dead expression in state.ts logLine (await Bun.file(LOG_PATH).exists() ? null : null) and replace read+rewrite with appendFile (resolves sfh-05). Use crypto.randomUUID in writeJsonAtomic instead of process.pid (resolves cs-04). Resolves: tda-01, tda-03, tda-04, ca-03, sfh-05, cs-04.",
+      "paths": ["forge/src/types.ts", "forge/src/state.ts", "forge/src/install.ts", "forge/src/doctor.ts", "forge/src/uninstall.ts", "forge/src/update.ts"],
+      "deps": [],
+      "research": ["docfork:typescript template-literal types", "claude-mem:prior type-design choices"],
+      "must_fix": ["tda-01", "tda-03", "tda-04", "ca-03", "sfh-05", "cs-04"],
+      "kind_hint": "pure-fn"
+    },
+    {
+      "id": "t9-doc-cleanups",
+      "claim": "Track 9 — doc cleanups (LOW). Every workaround comment in forge/src that flags a hack must link to the upstream issue (or be deleted if no longer applicable). Specifically: install.ts:161-162 (protect-mcp stub — link to obsolete evaluate/sign), install.ts:337-340 (claude-mem layout quirk — link to upstream packaging decision), install.ts:104/113/116/119/197-199/353-355 audited. Update cli.ts:1-6 stale docstring (says plugin lives at github.com/youssefKadaouiAbbassi/forge — actually monorepo at code-tools). Decision on claude-mem upstream PR: defer — the meta-judge says 'PR the claude-mem marketplace.json fix upstream' but code-reviewer cr-05 frames it as 'either upstream OR document as known fragile + add CI test'; we take the document path here since opening upstream PR is out-of-scope for this run. Resolves: ca-01, ca-02, cr-05.",
+      "paths": ["forge/src/install.ts", "forge/src/cli.ts"],
+      "deps": [],
+      "research": [],
+      "must_fix": ["ca-01", "ca-02", "cr-05"],
+      "kind_hint": "config-and-doc"
+    }
+  ]
+}
