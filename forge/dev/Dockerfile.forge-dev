@@ -1,0 +1,71 @@
+FROM mcr.microsoft.com/playwright:v1.59.1-noble AS base
+
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      jq build-essential pkg-config libssl-dev unzip \
+      python3 python3-pip python3-venv python3-dev \
+      bubblewrap socat sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN cargo install --locked cargo-mutants
+
+RUN pip3 install --break-system-packages hypothesis mutmut "pytest<9" apprise swebench
+
+RUN cargo install --locked --bin jj jj-cli
+
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/root/.local/bin:${PATH}"
+
+RUN bun add -g @stryker-mutator/core @stryker-mutator/typescript-checker fast-check
+
+# opengrep_manylinux_x86 ships x86_64 glibc despite the naming
+RUN curl -fsSL https://github.com/opengrep/opengrep/releases/latest/download/opengrep_manylinux_x86 -o /usr/local/bin/opengrep \
+    && chmod +x /usr/local/bin/opengrep \
+    && opengrep --version
+
+RUN curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | bash -s -- -b /usr/local/bin \
+    && curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | bash -s -- -b /usr/local/bin
+
+RUN bun add -g tdd-guard archon proofshot claude-mem @veritasacta/verify
+
+RUN mkdir -p /root/.claude/plugins/marketplaces \
+    && cd /root/.claude/plugins/marketplaces \
+    && git clone --depth 1 https://github.com/anthropics/claude-plugins-official.git \
+    && git clone --depth 1 https://github.com/anthropics/skills.git anthropics-skills \
+    && git clone --depth 1 https://github.com/wshobson/agents.git wshobson-agents \
+    && git clone --depth 1 https://github.com/jeremylongshore/claude-code-plugins-plus-skills.git
+
+RUN id forge 2>/dev/null || useradd -m -u 2000 -s /bin/bash forge \
+    && mkdir -p /home/forge/.claude /home/forge/.bun \
+    && chown -R forge:forge /home/forge \
+    && chmod 755 /root \
+    && ln -sf /root/.local/bin/claude /usr/local/bin/claude \
+    && for b in bun bunx stryker proofshot claude-mem archon tdd-guard; do \
+         ln -sf /root/.bun/bin/$b /usr/local/bin/$b 2>/dev/null || true; \
+       done \
+    && for b in jj cargo cargo-mutants; do \
+         [ -e /root/.cargo/bin/$b ] && ln -sf /root/.cargo/bin/$b /usr/local/bin/$b || true; \
+       done
+
+WORKDIR /workspace
+RUN mkdir -p /workspace/forge /root/.claude
+
+COPY init-forge-dev.sh /usr/local/bin/init-forge-dev
+RUN chmod +x /usr/local/bin/init-forge-dev
+
+ENV PATH="/home/forge/.bun/bin:/root/.bun/bin:/root/.cargo/bin:/root/.local/bin:${PATH}"
+
+CMD ["/bin/bash", "-c", "init-forge-dev && exec /bin/bash"]

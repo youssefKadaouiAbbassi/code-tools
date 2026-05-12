@@ -1,0 +1,30 @@
+services:
+  forge-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.forge-dev
+    image: forge-dev:latest
+    container_name: forge-dev
+    shm_size: 1gb
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    volumes:
+      - ../..:/workspace/code-tools
+      - ../:/workspace/forge
+      - ${HOME}/.claude/.credentials.json:/root/.claude/.credentials.json:rw
+      - ${HOME}/.claude.json:/root/.claude/.claude.json:rw
+      - forge-plugins-v2:/root/.claude/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - CLAUDE_CONFIG_DIR=/root/.claude
+      - FORGE_DEV=1
+      - HOME=/root
+    working_dir: /workspace/forge
+    stdin_open: true
+    tty: true
+    entrypoint: ["/bin/bash", "-c", "init-forge-dev > /tmp/init.log 2>&1; exec \"$0\" \"$@\""]
+
+volumes:
+  forge-plugins-v2:

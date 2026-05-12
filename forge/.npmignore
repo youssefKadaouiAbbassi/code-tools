@@ -1,0 +1,16 @@
+.claude-plugin/
+plugin/
+tests/
+bench/
+dev/
+tasks/
+hookify-rules/
+src/
+node_modules/
+*.log
+*.bak
+.bootstrapped
+SCOREBOARD.md
+.forge/
+bun.lockb
+tsconfig.json

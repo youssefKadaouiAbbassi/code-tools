@@ -1,0 +1,18 @@
+{
+  "name": "forge",
+  "owner": { "name": "Youssef Kadaoui Abbassi", "email": "youssefabbassi4@gmail.com" },
+  "allowCrossMarketplaceDependenciesOn": [
+    "claude-plugins-official",
+    "claude-code-workflows",
+    "claude-code-plugins-plus",
+    "tdd-guard"
+  ],
+  "plugins": [
+    {
+      "name": "forge",
+      "source": "./plugin",
+      "description": "One-command coding pipeline: plan → research → council → code → verify → ship PR with signed audit chain.",
+      "version": "0.0.1"
+    }
+  ]
+}
