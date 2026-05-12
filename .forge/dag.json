@@ -72,6 +72,42 @@
       "research": [],
       "must_fix": ["ca-01", "ca-02", "cr-05"],
       "kind_hint": "config-and-doc"
+    },
+    {
+      "id": "p07-tdd-guard-bun-wire",
+      "claim": "Wire `tdd-guard-bun` reporter (or 30-line custom bun reporter) so Bun tests write valid JSON to `.claude/tdd-guard/data/test.json` matching the schema at `tdd-guard/dist/contracts/schemas/reporterSchemas.js`. Without a real reporter, tdd-guard falls back to LLM-judge mode which rejected the 3 deferred items 7+ times. Adds bun reporter config to `forge/bunfig.toml` (new file) or `forge/package.json` test script. Verifies by running `bun test tests/L0/types-shape.test.ts` and asserting `.claude/tdd-guard/data/test.json` exists with valid structure.",
+      "paths": ["forge/bunfig.toml", "forge/package.json"],
+      "deps": [],
+      "research": ["docfork:tdd-guard-bun", "deepwiki:nizos/tdd-guard"],
+      "must_fix": [],
+      "kind_hint": "config"
+    },
+    {
+      "id": "p08-protect-mcp-merge",
+      "claim": "Follow-up to track 1 code half. `regenerateProtectMcpHooks()` at `forge/src/install.ts:165-199` currently overwrites every protect-mcp `hooks.json` it walks with `{hooks:{}}`, clobbering hypothetical upstream protect-mcp v2 (which would ship valid commands). Change behavior: read each candidate file, scan for `/protect-mcp\\s+(evaluate|sign)\\b/` (the obsolete subcommands), and ONLY clobber files matching that pattern. Files without the pattern are left untouched. Un-skip the pinned `L0.audit-1` test in `forge/tests/L0/types-shape.test.ts`. Resolves sfh-04 (critical) and ca-04 (high) — code half.",
+      "paths": ["forge/src/install.ts", "forge/tests/L0/types-shape.test.ts"],
+      "deps": ["p07-tdd-guard-bun-wire"],
+      "research": [],
+      "must_fix": ["sfh-04-code-half", "ca-04-code-half", "L0.audit-1"],
+      "kind_hint": "io"
+    },
+    {
+      "id": "p09-doctor-dedup",
+      "claim": "Follow-up to track 5. `forge/src/doctor.ts:75-80` declares a local `interface HealthResult` that shadows the canonical strict-discriminated-union from `forge/src/types.ts`. Delete the local interface, import the canonical one. Update `printResult` at line 82-86 to narrow `r.lines` via `\"lines\" in r` so the discriminated union compiles. Resolves tda-04 final migration.",
+      "paths": ["forge/src/doctor.ts"],
+      "deps": ["p07-tdd-guard-bun-wire"],
+      "research": [],
+      "must_fix": ["tda-04-final-migration"],
+      "kind_hint": "pure-fn"
+    },
+    {
+      "id": "p10-logline-append",
+      "claim": "Follow-up to track 5. `forge/src/state.ts:81-87` `logLine` reads-then-rewrites entire LOG_PATH on every call — O(n^2) growth and a lost-write race. The `appendFile` import is already at line 1 of state.ts. Replace `readFile + writeFile` with `await appendFile(LOG_PATH, line, \"utf8\")`. Remove now-unused `readFile, writeFile, existsSync` imports if no other consumer remains. Resolves sfh-05 final fix.",
+      "paths": ["forge/src/state.ts"],
+      "deps": ["p07-tdd-guard-bun-wire"],
+      "research": [],
+      "must_fix": ["sfh-05-final"],
+      "kind_hint": "io"
     }
   ]
 }

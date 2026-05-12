@@ -1,0 +1,1 @@
+{"parcel":"p09-doctor-dedup","kind":"pure-fn","rationale":"type-system change only (delete local interface, import from ./types, narrow via 'lines' in r). printResult is a pure dispatcher over the discriminated union. Mutation+PBT both required."}

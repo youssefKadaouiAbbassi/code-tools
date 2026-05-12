@@ -163,17 +163,18 @@ async function registerKMP(mp: { name: string; repo: string }, loc: string, now:
 
 
 export async function regenerateProtectMcpHooks(): Promise<void> {
-  // Blank every protect-mcp/hooks.json copy because upstream protect-mcp v0.5.5 invokes
-  // `evaluate` / `sign` subcommands that no longer exist (see wshobson/agents protect-mcp).
-  // Walk both marketplaces/* AND cache/* dirs — upstream registers under multiple marketplace
-  // names (claude-code-workflows + wshobson-agents). Merge-not-overwrite is a planned
-  // follow-up; tracked in .forge/audit/deferred.md (L0.audit-1 spec is skipped, not gone).
-  const { readdirSync, statSync } = await import("node:fs");
+  // Blank protect-mcp/hooks.json copies that invoke the obsolete v0.5.5 `evaluate` / `sign`
+  // subcommands (see wshobson/agents protect-mcp). Walk both marketplaces/* AND cache/* dirs.
+  // Files whose commands match the obsolete pattern are clobbered to `{hooks:{}}`; all other
+  // protect-mcp hooks.json files are left untouched so a future upstream v2 (with working
+  // commands) survives `forge install` / `forge update`.
+  const { readdirSync, readFileSync, statSync } = await import("node:fs");
+  const OBSOLETE = /protect-mcp\s+(?:evaluate|sign)\b/;
   const roots = [
     join(HOME, ".claude", "plugins", "marketplaces"),
     join(HOME, ".claude", "plugins", "cache"),
   ];
-  const stubs: string[] = [];
+  const candidates: string[] = [];
   for (const root of roots) {
     if (!existsSync(root)) continue;
     const stack = [root];
@@ -185,17 +186,20 @@ export async function regenerateProtectMcpHooks(): Promise<void> {
         const p = join(d, e);
         try {
           if (statSync(p).isDirectory()) stack.push(p);
-          else if (e === "hooks.json" && p.includes("/protect-mcp/")) stubs.push(p);
+          else if (e === "hooks.json" && p.includes("/protect-mcp/")) candidates.push(p);
         } catch { /* skip */ }
       }
     }
   }
   let patched = 0;
-  for (const f of stubs) {
+  for (const f of candidates) {
+    let content = "";
+    try { content = readFileSync(f, "utf8"); } catch { continue; }
+    if (!OBSOLETE.test(content)) continue;
     await writeFile(f, JSON.stringify({ hooks: {} }, null, 2), "utf8");
     patched++;
   }
-  if (patched) console.log(`  ✓ protect-mcp per-tool-call hooks disabled (${patched} file(s)) — Phase 6 signing via skill remains active`);
+  if (patched) console.log(`  ✓ protect-mcp obsolete hooks disabled (${patched} file(s)) — Phase 6 signing via skill remains active`);
 }
 
 async function writeWrapper(localPath: string | null): Promise<string> {

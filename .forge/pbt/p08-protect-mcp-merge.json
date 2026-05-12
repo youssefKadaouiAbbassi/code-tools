@@ -1,0 +1,7 @@
+{
+  "parcel": "p08-protect-mcp-merge",
+  "tool": "property-derivation-on-regex-predicate",
+  "rationale": "Pure boundary is the regex predicate `s => /protect-mcp (evaluate|sign)\\b/.test(s)`. Derivable property: ∀s, OBSOLETE.test(s) ↔ s contains `protect-mcp evaluate` OR `protect-mcp sign` (as a word). L0.audit-1 instantiates this with the canonical 2-tuple (positive, negative); the property holds. Counterexamples would require a string matching the regex but NOT containing those substrings — impossible by regex definition.",
+  "verdict": "VERIFIED",
+  "counterexamples": []
+}

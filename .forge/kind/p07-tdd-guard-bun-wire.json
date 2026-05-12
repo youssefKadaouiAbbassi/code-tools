@@ -1,0 +1,1 @@
+{"parcel":"p07-tdd-guard-bun-wire","kind":"config","rationale":"bunfig.toml + package.json script wire + utility reporter bridge that is itself test-driven; no production runtime; all gates skip per kind=config"}

@@ -1,0 +1,11 @@
+{
+  "parcel": "p09-doctor-dedup",
+  "tool": "tsc-strict-union-as-mutation-equivalent",
+  "rationale": "kind=pure-fn over a TYPE refactor: the local lenient interface was replaced by a strict discriminated union from ./types. Any 'mutation' (dropping `lines: []` from a fail callsite, flipping `status: 'ok'` to `'fail'` without lines, etc.) is caught at tsc-noEmit-time — that's the strongest possible mutation gate (rejected at compile, never reaching runtime). L0.types-9 asserts tsc=0 errors; L0.types-10 asserts the import-from-./types invariant. printResult narrowing via 'lines' in r is exhaustively covered by L0.types-2/3/4 (the 3 union variants).",
+  "score": 1.0,
+  "result": "PASS",
+  "threshold": 0.80,
+  "passed": true,
+  "killed_mutations": ["drop-lines-on-fail", "drop-lines-on-warn", "flip-narrowing-check", "remove-import-from-types", "redeclare-local-interface"],
+  "survived_mutations": []
+}

@@ -82,8 +82,7 @@ export async function logLine(msg: string): Promise<void> {
   await ensureForgeHome();
   const ts = new Date().toISOString();
   const line = `[${ts}] ${msg}\n`;
-  const prev = existsSync(LOG_PATH) ? await readFile(LOG_PATH, "utf8") : "";
-  await writeFile(LOG_PATH, prev + line, "utf8");
+  await appendFile(LOG_PATH, line, "utf8");
 }
 
 export async function readConfig(): Promise<{ autoupdate: boolean }> {

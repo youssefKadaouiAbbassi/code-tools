@@ -1,0 +1,1 @@
+{"parcel":"p10-logline-append","kind":"io","rationale":"logLine appends to LOG_PATH on disk; no pure-fn boundary worth extracting (timestamp + concat + appendFile is trivially exercised); mutation required, PBT skipped (no pure boundary)"}

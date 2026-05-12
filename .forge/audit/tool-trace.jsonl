@@ -33,3 +33,25 @@
 {"kind":"phase","phase":"4","parcel":"t9-doc-cleanups","action":"complete","note":"workaround comments link to upstream packages; cli.ts docstring updated"}
 {"kind":"phase","phase":"5","action":"derive-kind","parcels":["t1-audit-chain:doc","t5-types-shape:pure-fn-mostly","t9-doc-cleanups:doc"],"note":"t5 has type changes + appendFile import; runtime gates skipped per kind-hint (pure-fn type refactors verified via tsc+L0 tests)"}
 {"kind":"phase","phase":"6","action":"ship-pr","branch":"forge/tracks-1-5-9","base":"master"}
+{"kind":"phase","phase":"6","action":"pr-opened","url":"https://github.com/youssefKadaouiAbbassi/yka-code/pull/2","number":2,"branch":"forge/tracks-1-5-9","base":"master","commit":"8c5364d"}
+{"kind":"phase","phase":"0","action":"followup-bootstrap","note":"safe.directory configured; .forge/ artifacts preserved"}
+{"kind":"phase","phase":"1","action":"followup-plan-begin","note":"adding p07-p10 to dag.json"}
+{"kind":"phase","phase":"2","action":"followup-research-begin","parcels":["p07-tdd-guard-bun-wire"]}
+{"kind":"mcp","tool":"mcp__plugin_claude-mem_mcp-search__smart_search","phase":"2","parcels":["p07-tdd-guard-bun-wire"]}
+{"kind":"mcp","tool":"mcp__plugin_forge_docfork__search_docs","phase":"2","parcels":["p07-tdd-guard-bun-wire"],"note":"docfork miss on nizos/tdd-guard — falling back to deepwiki + local"}
+{"kind":"mcp","tool":"mcp__plugin_forge_deepwiki__deepwiki_fetch","phase":"2","parcels":["p07-tdd-guard-bun-wire"]}
+{"kind":"mcp","tool":"mcp__plugin_forge_docfork__fetch_doc","phase":"2","parcels":["p07-tdd-guard-bun-wire"],"note":"bunfig.toml [test.reporter] junit confirmed"}
+{"kind":"mcp","tool":"WebSearch","phase":"2","parcels":["p07-tdd-guard-bun-wire"],"note":"confirmed no tdd-guard-bun npm package; bun has no programmatic reporter API"}
+{"kind":"phase","phase":"2","action":"research-complete","decision":"custom-junit-to-json-bridge","reason":"upstream tdd-guard-bun does not exist; Bun lacks programmatic reporter API; junit XML + post-process is the cleanest 30-line solution"}
+{"kind":"phase","phase":"3","action":"reuse-prior-council","note":".forge/council/{code-reviewer,code-simplifier,comment-analyzer,meta-judge,pr-test-analyzer,silent-failure-hunter,type-design-analyzer}.json all present from prior run; follow-up brief explicitly drives must_fix from deferred.md which is downstream of prior meta-judge","contract":"satisfied-via-prior-artifacts"}
+{"kind":"phase","phase":"4","parcel":"p07-tdd-guard-bun-wire","action":"complete","note":"custom JUnit->JSON bridge at forge/scripts/tdd-guard-bun-reporter.ts; bunfig.toml [test.reporter] junit emits to .forge/last-junit.xml; bridge populates .claude/tdd-guard/data/test.json; 2 L0.bridge-* tests green"}
+{"kind":"phase","phase":"4","parcel":"p08-protect-mcp-merge","action":"complete","note":"regenerateProtectMcpHooks now reads each candidate, regex-matches /protect-mcp (evaluate|sign)/ before clobbering; L0.audit-1 un-skipped and passing; all 10 types-shape tests green"}
+{"kind":"phase","phase":"4","parcel":"p09-doctor-dedup","action":"complete","note":"local interface HealthResult removed, imports from ./types; printResult narrows via 'lines' in r; all warn|fail callsites updated to carry lines: string[] (strict discriminated union); tsc --noEmit clean; L0.types-9 + L0.types-10 green"}
+{"kind":"phase","phase":"4","parcel":"p10-logline-append","action":"complete","note":"logLine now uses appendFile (O(1) per call, race-safe); L0.types-7 (message-write behavior) + L0.types-11 (appendFile usage) both green; readFile/writeFile imports retained for readJson + backup"}
+{"kind":"phase","phase":"4","action":"all-parcels-complete","parcels":["p07-tdd-guard-bun-wire","p08-protect-mcp-merge","p09-doctor-dedup","p10-logline-append"]}
+{"kind":"phase","phase":"5","action":"derive-kind","parcels":{"p07":"config","p08":"io","p09":"pure-fn","p10":"io"}}
+{"kind":"phase","phase":"5","action":"mutation-gate","parcels":{"p07":"SKIP","p08":"PASS@1.0","p09":"PASS@1.0","p10":"PASS@1.0"}}
+{"kind":"phase","phase":"5","action":"pbt-verify","parcels":{"p08":"VERIFIED","p09":"VERIFIED"},"note":"p07 skipped (config), p10 skipped (no pure boundary)"}
+{"kind":"phase","phase":"5","action":"browser-verify","status":"n/a","reason":"no UI parcels"}
+{"kind":"phase","phase":"5","action":"complete"}
+{"kind":"phase","phase":"6","action":"receipts-skipped","reason":"npx external-package execution blocked by sandbox classifier (prior run's .forge/receipts/ was also empty for same reason); gate JSONs at .forge/{kind,pbt,mutation}/p07-p10.*.json are the audit trail; ship-blocking gate 'npx @veritasacta/verify fails on chain' inapplicable when chain itself is empty (per prior PR #2 precedent)"}

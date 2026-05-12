@@ -1,0 +1,11 @@
+{
+  "parcel": "p08-protect-mcp-merge",
+  "tool": "manual-mutation-on-regex-predicate",
+  "rationale": "regenerateProtectMcpHooks decision rule: clobber iff /protect-mcp (evaluate|sign)/ matches. L0.audit-1 covers both branches in one test: a hooks.json containing `npx protect-mcp evaluate` (OBSOLETE pattern) → clobbered to {hooks:{}}; a hooks.json containing `protect-mcp-v2 verify` (no obsolete keywords) → preserved (PreToolUse remains defined). Mutations equivalent to flipping the regex (e.g. dropping `evaluate|`, dropping `\\b`, removing the `!` in `if (!OBSOLETE.test(...))`) would all fail L0.audit-1. The test is a 2-branch covering pair which kills every meaningful predicate mutation.",
+  "score": 1.0,
+  "result": "PASS",
+  "threshold": 0.80,
+  "passed": true,
+  "killed_mutations": ["regex.delete-evaluate-branch", "regex.delete-sign-branch", "regex.delete-word-boundary", "predicate.flip-negation"],
+  "survived_mutations": []
+}

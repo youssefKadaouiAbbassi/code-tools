@@ -1,0 +1,1 @@
+{"parcel":"p08-protect-mcp-merge","kind":"io","rationale":"regenerateProtectMcpHooks reads + writes hooks.json files on disk; pure boundary is the regex check; mutation required, PBT optional on regex predicate"}

@@ -6,7 +6,7 @@ import {
   SETTINGS_PATH, KMP_PATH, HOME, FORGE_VERSION,
   readJson, ensureForgeHome,
 } from "./state";
-import type { ClaudeSettings } from "./types";
+import type { ClaudeSettings, HealthResult } from "./types";
 
 const FAKE_EVENTS: Record<string, string> = {
   UserPromptSubmit: '{"hook_event_name":"UserPromptSubmit","prompt":"hi","session_id":"abc","cwd":"/tmp"}',
@@ -72,22 +72,15 @@ export async function run(args: string[]): Promise<void> {
   process.exit(results.some((r) => r.status === "fail") ? 1 : 0);
 }
 
-interface HealthResult {
-  name: string;
-  status: "ok" | "warn" | "fail";
-  detail: string;
-  lines?: string[];
-}
-
 function printResult(r: HealthResult): void {
   const icon = r.status === "ok" ? "✓" : r.status === "warn" ? "⚠" : "✗";
   console.log(`${icon} ${r.name}: ${r.detail}`);
-  for (const l of r.lines ?? []) console.log(`    ${l}`);
+  if ("lines" in r) for (const l of r.lines) console.log(`    ${l}`);
 }
 
 async function checkBootstrapped(): Promise<HealthResult> {
   if (existsSync(BOOTSTRAPPED)) return { name: "bootstrapped", status: "ok", detail: "marker present" };
-  return { name: "bootstrapped", status: "fail", detail: "NOT BOOTSTRAPPED — run `forge install`" };
+  return { name: "bootstrapped", status: "fail", detail: "NOT BOOTSTRAPPED — run `forge install`", lines: [] };
 }
 
 async function checkMarketplaces(): Promise<HealthResult> {
@@ -111,17 +104,17 @@ async function checkPlugins(): Promise<HealthResult> {
 async function checkStatusLine(): Promise<HealthResult> {
   const settings = await readJson<Record<string, any>>(SETTINGS_PATH, {});
   const cmd = settings.statusLine?.command as string | undefined;
-  if (!cmd) return { name: "statusLine", status: "fail", detail: "not set in settings.json" };
+  if (!cmd) return { name: "statusLine", status: "fail", detail: "not set in settings.json", lines: [] };
   if (cmd.includes("claude-hud")) return { name: "statusLine", status: "ok", detail: "→ claude-hud" };
-  return { name: "statusLine", status: "warn", detail: `not pointing at claude-hud: ${cmd.slice(0, 80)}` };
+  return { name: "statusLine", status: "warn", detail: `not pointing at claude-hud: ${cmd.slice(0, 80)}`, lines: [] };
 }
 
 async function checkClaudeHudConfig(): Promise<HealthResult> {
   const p = join(HOME, ".claude", "plugins", "claude-hud", "config.json");
-  if (!existsSync(p)) return { name: "claude-hud config", status: "fail", detail: `missing: ${p}` };
+  if (!existsSync(p)) return { name: "claude-hud config", status: "fail", detail: `missing: ${p}`, lines: [] };
   const cfg = await readJson<Record<string, any>>(p, {});
   const customLine = cfg.display?.customLine as string | undefined;
-  if (!customLine || !customLine.includes("forge")) return { name: "claude-hud config", status: "warn", detail: `customLine not set to [forge ${FORGE_VERSION}]` };
+  if (!customLine || !customLine.includes("forge")) return { name: "claude-hud config", status: "warn", detail: `customLine not set to [forge ${FORGE_VERSION}]`, lines: [] };
   return { name: "claude-hud config", status: "ok", detail: `customLine=${customLine}` };
 }
 
@@ -175,9 +168,9 @@ async function checkMcpJson(): Promise<HealthResult> {
       }
     }
   }
-  if (!mcpPath) return { name: ".mcp.json", status: "fail", detail: "forge .mcp.json not found" };
+  if (!mcpPath) return { name: ".mcp.json", status: "fail", detail: "forge .mcp.json not found", lines: [] };
   let parsed: any;
-  try { parsed = JSON.parse(readFileSync(mcpPath, "utf8")); } catch (e: any) { return { name: ".mcp.json", status: "fail", detail: `parse error: ${e.message}` }; }
+  try { parsed = JSON.parse(readFileSync(mcpPath, "utf8")); } catch (e: any) { return { name: ".mcp.json", status: "fail", detail: `parse error: ${e.message}`, lines: [] }; }
   const declared = Object.keys(parsed.mcpServers ?? {});
   const missing = EXPECTED_MCPS.filter((s) => !declared.includes(s));
   if (missing.length === 0) return { name: ".mcp.json", status: "ok", detail: `${EXPECTED_MCPS.length}/${EXPECTED_MCPS.length} MCPs declared` };
@@ -189,7 +182,7 @@ async function checkClaudeMemPlugin(): Promise<HealthResult> {
   const settings = await readJson<Record<string, any>>(SETTINGS_PATH, {});
   const enabled = Object.keys(settings.enabledPlugins ?? {});
   if (enabled.includes("claude-mem@thedotmack")) return { name: "claude-mem plugin", status: "ok", detail: "claude-mem@thedotmack enabled (provides mcp__plugin_claude-mem_mcp-search__*)" };
-  return { name: "claude-mem plugin", status: "fail", detail: "claude-mem@thedotmack NOT enabled — run \`forge install\` to install it" };
+  return { name: "claude-mem plugin", status: "fail", detail: "claude-mem@thedotmack NOT enabled — run \`forge install\` to install it", lines: [] };
 }
 
 async function checkSystemTools(): Promise<HealthResult> {
@@ -219,7 +212,7 @@ async function checkSystemTools(): Promise<HealthResult> {
 async function checkHooks(): Promise<HealthResult> {
   const fail = await checkHooksOnly(true);
   if (fail === 0) return { name: "hook smoke", status: "ok", detail: "all enabled plugins' hooks exit clean" };
-  return { name: "hook smoke", status: "fail", detail: `${fail} hook command(s) errored — run \`forge doctor --hooks\` for details` };
+  return { name: "hook smoke", status: "fail", detail: `${fail} hook command(s) errored — run \`forge doctor --hooks\` for details`, lines: [] };
 }
 
 async function checkUpdates(): Promise<HealthResult> {

@@ -60,7 +60,25 @@ test("L0.types-8 — doctor.ts exports HealthResult-aware printResult flow via i
   expect(src.includes("HealthResult")).toBe(true);
 });
 
-test.skip("L0.audit-1 — regenerateProtectMcpHooks does NOT clobber a clean hooks.json that lacks obsolete commands (deferred — tdd-guard resistance, tracked in .forge/audit/deferred.md)", async () => {
+test("L0.types-10 — doctor.ts does not redeclare HealthResult locally; imports from ./types", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(join(SRC, "doctor.ts"), "utf8");
+  expect(src).not.toMatch(/^\s*interface HealthResult\b/m);
+  expect(src).toMatch(/import\s+(?:type\s+)?\{[^}]*\bHealthResult\b[^}]*\}\s+from\s+["']\.\/types["']/);
+});
+
+test("L0.types-11 — state.ts logLine uses appendFile (O(1) per call), not readFile+writeFile", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(join(SRC, "state.ts"), "utf8");
+  const logLineMatch = /export async function logLine\([^)]*\)[^{]*\{([\s\S]*?)^\}/m.exec(src);
+  expect(logLineMatch).toBeTruthy();
+  const body = logLineMatch![1];
+  expect(body).toMatch(/\bappendFile\b/);
+  expect(body).not.toMatch(/\breadFile\b/);
+  expect(body).not.toMatch(/\bwriteFile\b/);
+});
+
+test("L0.audit-1 — regenerateProtectMcpHooks does NOT clobber a clean hooks.json that lacks obsolete commands", async () => {
   const { mkdtempSync, rmSync } = await import("node:fs");
   const { mkdir, writeFile, readFile } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");

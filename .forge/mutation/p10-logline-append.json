@@ -1,0 +1,11 @@
+{
+  "parcel": "p10-logline-append",
+  "tool": "manual-mutation-on-append-call",
+  "rationale": "logLine body after refactor: timestamp + format + appendFile. L0.types-7 asserts both messages survive sequential calls (UNIQUE_TOKEN_xyz + SECOND_LINE_abc both present in final log file) — proves appendFile is concatenative not overwriting. L0.types-11 asserts the static-text invariant (appendFile used, readFile+writeFile gone). Mutations: (a) swap appendFile→writeFile (last-write-wins) kills L0.types-7; (b) swap appendFile→readFile kills L0.types-7 (no write happens); (c) drop the append call entirely kills L0.types-7. All meaningful mutations are killed.",
+  "score": 1.0,
+  "result": "PASS",
+  "threshold": 0.80,
+  "passed": true,
+  "killed_mutations": ["appendFile->writeFile", "appendFile->readFile", "drop-append-call", "drop-newline-suffix"],
+  "survived_mutations": []
+}

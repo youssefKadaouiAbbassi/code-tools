@@ -19,7 +19,8 @@
     "test:l0": "bun test tests/L0/",
     "test:l1": "bun test tests/L1/",
     "test:l2": "bun test tests/L2/",
-    "test:l3": "bun test tests/L3/"
+    "test:l3": "bun test tests/L3/",
+    "test:guarded": "bun test --reporter junit --reporter-outfile .forge/last-junit.xml tests/L0/ ; bun scripts/tdd-guard-bun-reporter.ts .forge/last-junit.xml"
   },
   "engines": {
     "bun": ">=1.0.0"

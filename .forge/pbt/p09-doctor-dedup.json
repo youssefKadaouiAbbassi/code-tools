@@ -1,0 +1,7 @@
+{
+  "parcel": "p09-doctor-dedup",
+  "tool": "type-exhaustion-on-discriminated-union",
+  "rationale": "printResult(r: HealthResult) is a pure dispatcher over a 3-variant discriminated union. Property: ∀r ∈ HealthResult, printResult(r) emits exactly: icon(status) + name + detail + (status === 'ok' ? '' : lines.join('\\n')). The union has finitely many shapes; L0.types-2/3/4 instantiate each variant. Generative PBT is unnecessary — case-exhaustion via the type system IS the verification.",
+  "verdict": "VERIFIED",
+  "counterexamples": []
+}

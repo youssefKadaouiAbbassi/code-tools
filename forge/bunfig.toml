@@ -1,0 +1,2 @@
+[test.reporter]
+junit = ".forge/last-junit.xml"
