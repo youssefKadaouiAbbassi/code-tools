@@ -97,18 +97,22 @@ EOF
 
 ```bash
 case "$STACK" in
-  typescript) bun test ".forge/pbt/${PARCEL_ID}.test.ts" 2>&1 | tee ".forge/pbt/${PARCEL_ID}-run.log" ;;
-  python)     pytest ".forge/pbt/test_${PARCEL_ID}_pbt.py" -q 2>&1 | tee ".forge/pbt/${PARCEL_ID}-run.log" ;;
-  rust)       cargo test --test "${PARCEL_ID}_pbt" 2>&1 | tee ".forge/pbt/${PARCEL_ID}-run.log" ;;
+  typescript) bun test "./.forge/pbt/${PARCEL_ID}.test.ts" 2>&1 | tee ".forge/pbt/${PARCEL_ID}-run.log"; EXIT=${PIPESTATUS[0]} ;;
+  python)     pytest ".forge/pbt/test_${PARCEL_ID}_pbt.py" -q 2>&1 | tee ".forge/pbt/${PARCEL_ID}-run.log"; EXIT=${PIPESTATUS[0]} ;;
+  rust)       cargo test --test "${PARCEL_ID}_pbt" 2>&1 | tee ".forge/pbt/${PARCEL_ID}-run.log"; EXIT=${PIPESTATUS[0]} ;;
 esac
-EXIT=$?
+# EXIT is captured per-branch above via ${PIPESTATUS[0]}; a bare `$?` would read
+# tee's exit code (always 0) and silently mask runner failures.
 ```
 
 ## 6. Parse → verdict
 
 ```bash
-PASS=$(grep -cE '\(pass\)|^\.|passed' ".forge/pbt/${PARCEL_ID}-run.log" || echo 0)
-TOTAL=$(grep -cE '^test|^def test_|fn .* {' ".forge/pbt/${PARCEL_ID}".* 2>/dev/null | head -1 | tr -d ' ')
+# Count passes from the runner log only (single file). The previous glob
+# `${PARCEL_ID}".*` matched both the test file AND the run.log, returning
+# multi-line counts that broke arithmetic comparisons downstream.
+PASS=$(grep -cE '\(pass\)' ".forge/pbt/${PARCEL_ID}-run.log" 2>/dev/null || echo 0)
+TOTAL=$(grep -cE '^[[:space:]]*test\(|^def test_|fn .* {' ".forge/pbt/${PARCEL_ID}.test.ts" ".forge/pbt/test_${PARCEL_ID}_pbt.py" ".forge/pbt/${PARCEL_ID}_pbt.rs" 2>/dev/null | awk -F: '{s+=$NF} END {print s+0}')
 
 if [ "${TOTAL:-0}" -eq 0 ]; then
   VERDICT="MISSING"; REASON="no-derivable-property"
@@ -116,7 +120,8 @@ elif [ "$EXIT" -eq 0 ] && [ "$PASS" -ge "$TOTAL" ]; then
   VERDICT="VERIFIED"; REASON=""
 else
   VERDICT="PARTIAL"
-  REASON=$(grep -A20 'Counterexample\|Falsified after\|Falsifying example' ".forge/pbt/${PARCEL_ID}-run.log" | head -20 || echo "see run log")
+  REASON=$(grep -A2 'Counterexample\|Falsified after\|Falsifying example' ".forge/pbt/${PARCEL_ID}-run.log" 2>/dev/null | head -6)
+  [ -z "$REASON" ] && REASON="runner failed (exit=$EXIT) — see .forge/pbt/${PARCEL_ID}-run.log"
 fi
 
 cat > ".forge/pbt/${PARCEL_ID}.json" <<EOF

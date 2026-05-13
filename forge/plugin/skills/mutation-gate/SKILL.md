@@ -64,19 +64,19 @@ case "$STACK" in
     NOCOV=$(jq '[.files[].mutants[] | select(.status=="NoCoverage")] | length' "$REPORT")
     TIMEOUT_COUNT=$(jq '[.files[].mutants[] | select(.status=="Timeout")] | length' "$REPORT")
     DENOM=$((KILLED + SURVIVED + NOCOV))
-    if [ "$DENOM" -gt 0 ]; then SCORE=$(echo "scale=3; $KILLED / $DENOM" | bc); else SCORE=1; fi
+    if [ "$DENOM" -gt 0 ]; then SCORE=$(awk -v k="$KILLED" -v d="$DENOM" 'BEGIN { printf "%.3f", k/d }'); else SCORE=1.000; fi
     ;;
   python)
     KILLED=$(grep -oE '[0-9]+ killed' ".forge/mutation/${PARCEL_ID}-mutmut-results.txt" | grep -oE '[0-9]+' | head -1)
     SURVIVED=$(grep -oE '[0-9]+ survived' ".forge/mutation/${PARCEL_ID}-mutmut-results.txt" | grep -oE '[0-9]+' | head -1)
     DENOM=$((KILLED + SURVIVED))
-    if [ "$DENOM" -gt 0 ]; then SCORE=$(echo "scale=3; $KILLED / $DENOM" | bc); else SCORE=1; fi
+    if [ "$DENOM" -gt 0 ]; then SCORE=$(awk -v k="$KILLED" -v d="$DENOM" 'BEGIN { printf "%.3f", k/d }'); else SCORE=1.000; fi
     ;;
   rust)
     CAUGHT=$(grep -cE '^CAUGHT' ".forge/mutation/${PARCEL_ID}-cargo-mutants.txt" || echo 0)
     MISSED=$(grep -cE '^MISSED' ".forge/mutation/${PARCEL_ID}-cargo-mutants.txt" || echo 0)
     DENOM=$((CAUGHT + MISSED))
-    if [ "$DENOM" -gt 0 ]; then SCORE=$(echo "scale=3; $CAUGHT / $DENOM" | bc); else SCORE=1; fi
+    if [ "$DENOM" -gt 0 ]; then SCORE=$(awk -v k="$CAUGHT" -v d="$DENOM" 'BEGIN { printf "%.3f", k/d }'); else SCORE=1.000; fi
     KILLED=$CAUGHT
     SURVIVED=$MISSED
     ;;
@@ -88,7 +88,7 @@ esac
 ## 4. Gate
 
 ```bash
-RESULT=$([ "$(echo "$SCORE >= 0.80" | bc -l)" = "1" ] && echo PASS || echo BLOCK)
+RESULT=$(awk -v s="$SCORE" 'BEGIN { exit (s+0 >= 0.80) ? 0 : 1 }' && echo PASS || echo BLOCK)
 [ "${TIMEOUT_COUNT:-0}" -gt 0 ] && [ "$RESULT" = "PASS" ] && RESULT="PASS-WITH-TIMEOUT"
 cat > ".forge/mutation/${PARCEL_ID}.json" <<EOF
 {
