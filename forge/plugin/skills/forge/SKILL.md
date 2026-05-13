@@ -211,6 +211,30 @@ esac
 
 Any gate fail → re-enter Phase 4 with the failing report. Two consecutive fails on the same parcel → halt the DAG.
 
+### Anti-theatre invariants (verify-gate FAILURE if any trip)
+
+After each subagent gate returns, forge-lead MUST validate the artifact contains evidence of real execution. **Fabricated verdicts (subagent narrates a PASS without invoking the underlying tool) are a ship-blocking failure.** Run these checks:
+
+```bash
+# mutation: requires real tool name + on-disk raw report
+for f in .forge/mutation/*.json; do
+  TOOL=$(jq -r '.tool // "manual"' "$f")
+  RAW=$(jq -r '.raw_report // empty' "$f")
+  [ "$TOOL" = "manual" ] && { echo "THEATRE: $f has tool=manual"; exit 1; }
+  [ -n "$RAW" ] && [ -s "$RAW" ] || { echo "THEATRE: $f raw_report missing/empty ($RAW)"; exit 1; }
+done
+
+# pbt: requires on-disk test file + runner output
+for f in .forge/pbt/*.json; do
+  TF=$(jq -r '.test_file // empty' "$f")
+  RO=$(jq -r '.runner_output_path // empty' "$f")
+  [ -n "$TF" ] && [ -f "$TF" ] || { echo "THEATRE: $f test_file missing ($TF)"; exit 1; }
+  [ -n "$RO" ] && [ -f "$RO" ] || { echo "THEATRE: $f runner_output missing ($RO)"; exit 1; }
+done
+```
+
+A `tool: "manual"` mutation receipt or a missing PBT test file means the subagent hallucinated. Halt the run, do NOT proceed to Phase 6.
+
 ## Phase 6 — Ship
 
 ```bash
@@ -324,6 +348,7 @@ git fsck --strict
 - protect-mcp Cedar denial in chain *(PENDING — fires only when upstream protect-mcp v2 ships working PreToolUse hooks; today this gate is a no-op pending hook-level signing)*
 - `npx @veritasacta/verify` fails on a chain that contains at least one signed receipt (skipped when all receipts have `signature:null`, since the verifier rejects unsigned input)
 - parcel branch `forge/<parcel-id>` not merged back into the integration branch by end of Phase 6 — the worktree contains code that never reached the user's checkout
+- anti-theatre invariant failure: any `.forge/mutation/*.json` has `tool: "manual"` OR missing `raw_report` on disk; any `.forge/pbt/*.json` lacks an on-disk `test_file` or `runner_output_path`
 - stub-warn flagged stub reaching merge
 
 ## Output contract
