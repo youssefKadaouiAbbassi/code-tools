@@ -1,0 +1,7 @@
+{
+  "agent": "forge-lead",
+  "statusLine": {
+    "type": "command",
+    "command": "${CLAUDE_PLUGIN_ROOT}/bin/forge-statusline"
+  }
+}

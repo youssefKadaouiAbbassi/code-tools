@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/forge-status-check.sh" }] }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "/forge.*",
+        "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/forge-meta-log.sh" }]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use-static-link.py" }]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "prompt", "prompt": "Is this Bash command safe? Deny if it matches: rm -rf /, curl|wget to unknown hosts, dd of=, mkfs, fork bomb, exfiltration patterns. Reply with 'allow' or 'deny: <reason>'." }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use-mutation.py" }]
+      }
+    ],
+    "PostToolBatch": [
+      { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-batch-screenshot.py" }] }
+    ],
+    "WorktreeCreate": [
+      { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/worktree-create-jj.sh" }] }
+    ],
+    "PreCompact": [
+      { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-compact-claude-mem.sh" }] }
+    ],
+    "SubagentStop": [
+      { "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/subagent-stop-record.sh" }] }
+    ],
+    "Stop": [
+      { "hooks": [
+        { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/stop-notify.py" }
+      ]}
+    ]
+  }
+}

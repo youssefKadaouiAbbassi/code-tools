@@ -1,7 +1,9 @@
 ---
-description: [yka-code] Re-enable a yka-code hook. Use "all" to clear every disable. Usage: /hooks-enable pre-pr-gate
+name: hooks-enable
+description: "[yka-code] Re-enable a yka-code hook. Use \"all\" to clear every disable. Usage: /hooks-enable pre-pr-gate"
 allowed-tools: Bash
 argument-hint: <hook-name> | all
+disable-model-invocation: true
 ---
 
 # /hooks-enable

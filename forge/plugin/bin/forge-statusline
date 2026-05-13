@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+input=$(cat 2>/dev/null || true)
+
+cwd=$(printf "%s" "$input" | jq -r '.workspace.current_dir // .cwd // empty' 2>/dev/null || true)
+[ -z "$cwd" ] && cwd="$PWD"
+
+model=$(printf "%s" "$input" | jq -r '.model.display_name // .model.id // empty' 2>/dev/null || true)
+[ -z "$model" ] && model="claude"
+
+phase="—"
+[ -f "$cwd/.forge/phase" ] && phase=$(tr -d '\n' < "$cwd/.forge/phase")
+
+parcel=""
+if [ -f "$cwd/.forge/dag.json" ]; then
+  parcel=$(jq -r '.current_parcel // empty' < "$cwd/.forge/dag.json" 2>/dev/null || true)
+fi
+
+mut=""
+if [ -d "$cwd/.forge/mutation" ]; then
+  latest=$(ls -t "$cwd/.forge/mutation"/*.json 2>/dev/null | head -1 || true)
+  if [ -n "$latest" ]; then
+    mut=$(jq -r '.score // empty' < "$latest" 2>/dev/null || true)
+  fi
+fi
+
+branch=""
+if git -C "$cwd" rev-parse --abbrev-ref HEAD >/dev/null 2>&1; then
+  branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD)
+fi
+
+out="🔨 forge:$phase"
+[ -n "$parcel" ] && out="$out | $parcel"
+[ -n "$mut" ] && out="$out | mut=$mut"
+out="$out | $model"
+[ -n "$branch" ] && out="$out | $branch"
+
+printf "%s" "$out"

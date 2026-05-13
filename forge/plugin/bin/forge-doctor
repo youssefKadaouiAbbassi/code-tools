@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+flag="${1:---banner}"
+
+ver() {
+  local name="$1" cmd="$2"
+  if eval "$cmd" >/dev/null 2>&1; then
+    local v
+    v=$(eval "$cmd" 2>&1 | head -1)
+    printf "  %-16s %s\n" "$name" "$v"
+  else
+    printf "  %-16s MISSING\n" "$name"
+    return 1
+  fi
+}
+
+print_banner() {
+  echo "forge-doctor — capability matrix"
+  echo
+  printf "  %-16s %s\n" "tool" "version"
+  printf "  %-16s %s\n" "----" "-------"
+  local fail=0
+  ver "claude" "claude --version" || fail=1
+  ver "bun" "bun --version" || fail=1
+  ver "jj" "jj --version" || fail=1
+  ver "cargo" "cargo --version" || fail=1
+  ver "cargo-mutants" "cargo mutants --version" || fail=1
+  ver "stryker" "stryker --version" || fail=1
+  ver "fast-check" "ls /root/.bun/install/cache/fast-check@* 2>/dev/null | head -1 | grep -oE 'fast-check@[0-9.]+' || cat /root/.bun/install/global/node_modules/fast-check/package.json 2>/dev/null | jq -r '\"fast-check@\" + .version'" || fail=1
+  ver "hypothesis" "python3 -c 'import hypothesis;print(hypothesis.__version__)'" || fail=1
+  ver "mutmut" "mutmut --version" || fail=1
+  ver "playwright" "test -d /ms-playwright && echo preinstalled-noble" || fail=1
+  ver "proofshot" "proofshot --version 2>/dev/null || which proofshot" || fail=1
+  ver "claude-mem" "claude-mem --version 2>/dev/null || which claude-mem" || fail=1
+  ver "opengrep" "opengrep --version" || fail=1
+  ver "grype" "grype version" || fail=1
+  ver "syft" "syft version" || fail=1
+  ver "apprise" "apprise --version" || fail=1
+  ver "gh" "gh --version" || fail=1
+  ver "veritasacta" "cat /root/.bun/install/global/node_modules/@veritasacta/verify/package.json 2>/dev/null | jq -r '\"@veritasacta/verify@\" + .version'" || fail=1
+  ver "tdd-guard" "tdd-guard --version 2>/dev/null || which tdd-guard" || fail=1
+  ver "snyk" "npx -y snyk@latest --version 2>/dev/null | head -1" || fail=1
+
+  echo
+  echo "Plugins:"
+  claude plugin list 2>&1 | grep -E '^\s+❯' | head -30 || echo "  (claude plugin list failed)"
+
+  return $fail
+}
+
+case "$flag" in
+  --first-run)
+    # SessionStart context — warn-only, never fail the hook
+    print_banner || true
+    exit 0
+    ;;
+  --banner|--full) print_banner ;;
+  *) echo "Usage: forge-doctor [--banner|--first-run|--full]"; exit 0 ;;
+esac

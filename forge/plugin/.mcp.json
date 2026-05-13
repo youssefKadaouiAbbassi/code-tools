@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "docfork": { "command": "npx", "args": ["-y", "docfork@latest"] },
+    "deepwiki": { "command": "npx", "args": ["-y", "mcp-deepwiki@latest"] },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github@latest"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN:-}" }
+    },
+    "snyk": {
+      "command": "npx",
+      "args": ["-y", "snyk@latest", "mcp", "-t", "stdio"]
+    }
+  }
+}

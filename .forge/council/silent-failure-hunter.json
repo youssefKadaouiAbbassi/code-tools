@@ -1,0 +1,72 @@
+{
+  "persona": "silent-failure-hunter",
+  "model": "opus",
+  "findings": [
+    {
+      "id": "sfh-01",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts",
+      "lines": "36-53",
+      "confidence": 95,
+      "severity": "high",
+      "title": "Marketplace add failures are logged then continue silently",
+      "evidence": "spawnSync('claude', ['plugin','marketplace','add',...]) — if r.status != 0 and stderr does not contain 'already', the code logs '✗ FAILED' and proceeds. install() reports overall success based only on `claudePluginInstall` returns, not on marketplace registration. A user can end with 0/5 marketplaces registered and still see '✅ forge installed'.",
+      "fix": "Track failed marketplace adds in an accumulator; if any required marketplace failed AND `claude plugin install` for a plugin depending on it succeeds (false positive — claude install silently no-ops when plugin not found), abort with exit 1."
+    },
+    {
+      "id": "sfh-02",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts",
+      "lines": "56, 117, 363, 364",
+      "confidence": 92,
+      "severity": "high",
+      "title": "Five `claude plugin marketplace update` / `plugin install` calls swallow return code with `stdio: ignore` or unchecked `spawnSync`",
+      "evidence": "Lines 56, 363, 364: spawnSync with stdio:'ignore' or stdio:'pipe' but the return value is never inspected. If `claude` binary is missing or the marketplace listing fetch fails (e.g. network down inside CI), install proceeds as if successful and the doctor step is the only diagnostic — but doctor runs AFTER install reports OK.",
+      "fix": "Centralize `runClaude(args, {required: true})`. Required calls hard-fail; optional calls (e.g. marketplace refresh) log a warning. Never use stdio:'ignore' for a step whose failure changes downstream state."
+    },
+    {
+      "id": "sfh-03",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts",
+      "lines": "317-318, 322-326",
+      "confidence": 90,
+      "severity": "medium",
+      "title": "Prereq installer reports per-step failure but the function returns void — caller has no signal",
+      "evidence": "installPrereqs() prints '✗ exit=N — re-run install or install manually' but never throws nor propagates. Subsequent install steps that depend on cargo/jj/etc proceed; failures surface only as a follow-up `forge doctor` red line. The user sees '✅ forge installed' even though /forge:forge will explode on the first jj snapshot.",
+      "fix": "installPrereqs() returns {installed: string[], failed: string[]}. install() prints a final 'will-fail-at-runtime: jj, cargo-mutants — please install manually' summary and exits 1 if any REQUIRED tool failed."
+    },
+    {
+      "id": "sfh-04",
+      "parcel": "p05-pipeline-design",
+      "file": "forge/src/install.ts",
+      "lines": "161-193 (regenerateProtectMcpHooks)",
+      "confidence": 95,
+      "severity": "critical",
+      "title": "protect-mcp signing is silently stubbed — the audit chain that forge advertises is fabricated downstream by forge itself",
+      "evidence": "regenerateProtectMcpHooks() walks ~/.claude/plugins/marketplaces and ~/.claude/plugins/cache for any `protect-mcp/hooks.json` and overwrites with `{hooks: {}}`. README.md L82 and SKILL.md Phase 6 step 1 both claim 'protect-mcp signs every PreToolUse/PostToolUse → .forge/receipts/*.json'. Reality: the hooks are blanked, then SKILL.md falls back to `npx @veritasacta/verify sign-payload` invoked by the runbook itself. The receipt chain therefore signs only what forge chose to sign, not actual tool calls. This is a semantic divergence between marketing and behavior.",
+      "fix": "Pick one: (a) document honestly — 'forge generates synthetic gate-level receipts; per-tool-call signing requires upstream protect-mcp v2 (TBD)'. (b) Replace the stub with a working PreToolUse hook (a 10-line bash script that hashes tool_input + signs with ed25519). Don't pretend the stub is the audit chain."
+    },
+    {
+      "id": "sfh-05",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/state.ts",
+      "lines": "77-85 (logLine)",
+      "confidence": 88,
+      "severity": "medium",
+      "title": "logLine reads whole log file then rewrites — O(n²) over a run, race-prone, and silently swallows EROFS / ENOSPC",
+      "evidence": "Each logLine() does `readFile(LOG_PATH) + writeFile(LOG_PATH, prev + line)`. Two forge runs in parallel will lose one's log. No try/catch — on EROFS the await throws and the calling install/update/uninstall aborts mid-flow. Worse: line 81 `await Bun.file(LOG_PATH).exists() ? null : null` is a dead expression (always null branch), masking intent.",
+      "fix": "`await fs.promises.appendFile(LOG_PATH, line)`. Delete the dead expression. Wrap in try-catch — log loss is non-fatal."
+    },
+    {
+      "id": "sfh-06",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/uninstall.ts",
+      "lines": "73",
+      "confidence": 85,
+      "severity": "medium",
+      "title": "claude-mem uninstall is fire-and-forget — exit code ignored, no verification that the marketplace dir is gone",
+      "evidence": "`spawnSync('bash', ['-c', 'npx -y claude-mem@latest uninstall </dev/null'], { stdio: 'ignore', timeout: 60_000 })` then immediately prints '✓ uninstalled claude-mem plugin' regardless of whether the npx invocation succeeded. The verification block (L77-92) does check forge marketplaces but not the `thedotmack` claude-mem one. A failed claude-mem uninstall leaves behind a stale plugin that breaks the next install (the fixClaudeMemMarketplaceJson early-returns when mpDir already exists).",
+      "fix": "Capture exit code; verify ~/.claude/plugins/marketplaces/thedotmack is absent; surface failure with retry hint."
+    }
+  ]
+}

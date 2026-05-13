@@ -1,0 +1,42 @@
+{
+  "name": "@yka/forge",
+  "publishConfig": { "access": "public" },
+  "version": "0.0.1",
+  "description": "One-command coding pipeline for Claude Code: plan → research → council → code → verify → ship PR with signed audit chain.",
+  "type": "module",
+  "bin": {
+    "forge": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "bun build src/cli.ts --target=bun --outfile=dist/cli.js --minify",
+    "dev": "bun src/cli.ts",
+    "prepublishOnly": "bun run build",
+    "test:l0": "bun test tests/L0/",
+    "test:l1": "bun test tests/L1/",
+    "test:l2": "bun test tests/L2/",
+    "test:l3": "bun test tests/L3/"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "keywords": ["claude-code", "claude", "tdd", "mutation-testing", "council", "audit", "pr-review"],
+  "author": "Youssef Kadaoui Abbassi <youssefabbassi4@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/youssefKadaouiAbbassi/forge",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/youssefKadaouiAbbassi/forge.git"
+  },
+  "dependencies": {
+    "hyparquet": "^1.25.6"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}

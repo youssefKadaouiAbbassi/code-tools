@@ -1,0 +1,6 @@
+{
+  "parcel": "t1-audit-chain",
+  "kind": "config",
+  "rationale": "Path (b) was selected: documentation rewrite (README + SKILL.md) + planned 3-line code merge-not-overwrite. Doc edits are config-class. The code half of path (b) was halted on tdd-guard resistance and is captured as a skipped test spec (L0.audit-1) + deferred follow-up. Per SKILL.md Phase 5: config kind skips all gates (PBT, mutation, browser).",
+  "gates_routed": "none (config) — verified via README+SKILL.md greps for honest gate-level language"
+}

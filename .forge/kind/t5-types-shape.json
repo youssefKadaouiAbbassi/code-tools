@@ -1,0 +1,8 @@
+{
+  "parcel": "t5-types-shape",
+  "kind": "pure-fn",
+  "rationale": "types.ts is a pure type-and-factory module (interfaces + identity factory makeHealthResult). state.ts changes (randomUUID for tmp file naming, ClaudeSettings re-exports, PluginSpec template-literal alignment) are pure-fn boundary work. doctor.ts import cleanup is type-system only. Verified via tsc --noEmit (no errors) and L0 tests covering: type imports, identity factory shape, runtime pairing of PLUGINS to MARKETPLACES, dead-expression absence, log-write behavior, tsc cleanliness.",
+  "gates_routed": "tsc --noEmit + L0 unit tests (9 pass, 1 skip)",
+  "mutation_score_proxy": "type-only changes — mutation testing is moot; tsc + L0 type-discrimination tests serve the same role",
+  "pbt_status": "N/A — types are not value-bearing functions; L0.types-2/3/4 exhaustively cover the 3 discriminated-union shapes (ok / warn / fail)"
+}

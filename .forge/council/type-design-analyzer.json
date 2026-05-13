@@ -1,0 +1,61 @@
+{
+  "persona": "type-design-analyzer",
+  "model": "opus",
+  "findings": [
+    {
+      "id": "tda-01",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts, doctor.ts, uninstall.ts, update.ts",
+      "lines": "across all files",
+      "confidence": 95,
+      "severity": "high",
+      "title": "Settings.json shape is `Record<string, any>` everywhere — no shared schema, every callsite hand-rolls property access",
+      "evidence": "install.ts L63 `readJson<Record<string, unknown>>`, doctor.ts L101 `readJson<Record<string, any>>`, uninstall.ts L48 same, update.ts L55 same. settings.enabledPlugins, settings.extraKnownMarketplaces, settings.statusLine, settings.permissions are all accessed with bracket notation + casts. A typo (settings.enabledPlugin) compiles. A schema change in Claude Code's settings.json silently no-ops.",
+      "fix": "Define `interface ClaudeSettings { enabledPlugins?: Record<string,boolean>; statusLine?: { type: 'command'; command: string }; permissions?: { allow?: string[]; defaultMode?: string }; extraKnownMarketplaces?: Record<string, MarketplaceRef> }` in src/types.ts. readJson<ClaudeSettings>. zod or valibot at the boundary (5-line schema, fail loud on shape drift)."
+    },
+    {
+      "id": "tda-02",
+      "parcel": "p01-cli-stack",
+      "file": "forge/src/cli.ts",
+      "lines": "10-17, 82-90",
+      "confidence": 92,
+      "severity": "high",
+      "title": "Subcommand dispatch uses dynamic `import()` + `as keyof typeof commands` cast — no type-checked args, no help-per-subcommand, no completions",
+      "evidence": "`commands` is a record of arrow-fn loaders returning `Promise<typeof import('./X')>`. The args contract (`mod.run(Bun.argv.slice(3))`) is by convention only. install.ts uses argv.indexOf('--local'), doctor.ts uses .includes('--quiet'), uninstall.ts uses .includes('--keep-deps'). Each subcommand re-implements argv parsing with subtle differences. No --help <cmd>. No shell completion. Adding a `--json` to install requires copy-pasting parser code from doctor.ts.",
+      "fix": "Adopt a real parser. citty (unjs) is the strongest 2026 choice: ESM-first, Bun-friendly, TypeScript-native, sub-300LOC dep, supports nested commands + auto-generated help + completions. Commander v13 also fine. Replace ad-hoc argv.indexOf with `defineCommand({ args: { local: { type: 'string', description: '...' }, withExtras: { type: 'boolean' } } })`. Refs: [unjs/citty](https://github.com/unjs/citty), [cacjs/cac](https://github.com/cacjs/cac)."
+    },
+    {
+      "id": "tda-03",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/state.ts",
+      "lines": "18-21, 36-50",
+      "confidence": 85,
+      "severity": "medium",
+      "title": "MarketplaceEntry and PLUGINS are parallel string arrays — pairing rule lives only in the developer's head",
+      "evidence": "PLUGINS is `string[]` of `'<name>@<marketplace>'` literals. There's no compile-time link between the plugin spec 'tdd-guard@tdd-guard' and the existence of the 'tdd-guard' marketplace in MARKETPLACES. Drop a marketplace, the install proceeds and `claude plugin install tdd-guard@tdd-guard` fails at runtime.",
+      "fix": "Type-level join: `type MarketplaceName = (typeof MARKETPLACES)[number]['name']; type PluginSpec = `${string}@${MarketplaceName}`; const PLUGINS: PluginSpec[] = [...]`. Compile error if you reference a marketplace that doesn't exist."
+    },
+    {
+      "id": "tda-04",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/doctor.ts",
+      "lines": "74-79",
+      "confidence": 80,
+      "severity": "low",
+      "title": "HealthResult.status is a string union but no discriminator on `lines` vs `detail`",
+      "evidence": "`{ name, status: 'ok'|'warn'|'fail', detail: string, lines?: string[] }`. Lines is only meaningful when status is fail or warn — but the type doesn't enforce that. Callers must remember to populate lines only on failures.",
+      "fix": "Discriminated union: `type HealthResult = { name: string } & ({ status: 'ok'; detail: string } | { status: 'warn' | 'fail'; detail: string; lines: string[] })`. Forces every fail/warn to ship structured detail."
+    },
+    {
+      "id": "tda-05",
+      "parcel": "p01-cli-stack",
+      "file": "forge/src/cli.ts",
+      "lines": "8",
+      "confidence": 82,
+      "severity": "medium",
+      "title": "Version is a hardcoded string literal — drifts from package.json on every bump",
+      "evidence": "`const VERSION = '0.0.1'` in cli.ts AND `version: '0.0.1'` in package.json AND `FORGE_VERSION = '0.0.1'` in state.ts AND `version: '0.0.1'` in plugin/.claude-plugin/plugin.json AND `version: '0.0.1'` in .claude-plugin/marketplace.json. Five sources of truth.",
+      "fix": "Import from package.json with Bun's `with { type: 'json' }`: `import pkg from '../package.json' with { type: 'json' }; export const FORGE_VERSION = pkg.version`. Use a release script (or `bun pm version`) that bumps all manifests in lockstep."
+    }
+  ]
+}

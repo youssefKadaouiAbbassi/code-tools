@@ -1,0 +1,61 @@
+{
+  "persona": "comment-analyzer",
+  "model": "opus",
+  "findings": [
+    {
+      "id": "ca-01",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts",
+      "lines": "104, 113, 116, 119, 161-162, 197-199, 337-340, 353-355",
+      "confidence": 85,
+      "severity": "medium",
+      "title": "Comments justify hacks but never link to the upstream issue they work around",
+      "evidence": "Line 116: '// 3c. Stub protect-mcp hooks LAST (must be after any marketplace refresh).' — but no link to the protect-mcp issue that requires the stub. Line 161: 'Stub the broken upstream protect-mcp hooks (calls obsolete `evaluate`/`sign` subcommands)' — should link to the upstream issue/PR. Line 337-340: 'claude-mem is a self-installing Claude Code plugin ... quirk: it writes its marketplace.json to .agents/plugins/' — should link to the upstream layout decision. When upstream fixes any of these, the workaround stays forever because there's no breadcrumb back.",
+      "fix": "Every workaround comment must include `// Workaround for <repo>#<issue>; remove when fixed.`. Bonus: a TODO-scanner CI step that closes a tracking issue when the upstream issue closes."
+    },
+    {
+      "id": "ca-02",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/cli.ts",
+      "lines": "1-6",
+      "confidence": 82,
+      "severity": "low",
+      "title": "File-level docstring claims facts that are now wrong",
+      "evidence": "`forge — Claude Code plugin orchestrator CLI. Distributes via npm ... the actual plugin lives at github.com/youssefKadaouiAbbassi/forge`. But the plugin marketplace.json lives in forge/.claude-plugin/ in this very repo (code-tools), not at a separate repo. The 'separate repo' line is aspirational/stale.",
+      "fix": "Either move the plugin to its own repo (matches the comment) or update the comment to reflect monorepo reality."
+    },
+    {
+      "id": "ca-03",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/state.ts",
+      "lines": "81 (logLine)",
+      "confidence": 95,
+      "severity": "medium",
+      "title": "Dead-expression comment-substitute — `await Bun.file(LOG_PATH).exists() ? null : null` says nothing and does nothing",
+      "evidence": "`await Bun.file(LOG_PATH).exists() ? null : null;` is a no-op ternary used in lieu of removing or replacing legacy code. The comment '// append' two lines later is the only hint at intent. This is the kind of artifact that confuses future readers and survives forever because it 'looks load-bearing'.",
+      "fix": "Delete the no-op. Replace the read-then-write with `await fs.promises.appendFile(LOG_PATH, line)`. The intent becomes self-documenting."
+    },
+    {
+      "id": "ca-04",
+      "parcel": "p05-pipeline-design",
+      "file": "forge/plugin/skills/forge/SKILL.md",
+      "lines": "159-215 (Phase 6 step 1)",
+      "confidence": 88,
+      "severity": "high",
+      "title": "Phase 6 step 1 comment block describes a fallback as if it were primary — masks the fact that the primary path is stubbed",
+      "evidence": "L160-163: 'protect-mcp signs every PreToolUse/PostToolUse → .forge/receipts/*.json (auto via hooks). Each receipt MUST be a JSON object with {payload, signature} where signature is a hex Ed25519 sig (128 chars). If the protect-mcp hook didn't fire, fall back to writing one signed receipt per gate using `npx @veritasacta/verify sign-payload`.' Reads as 'normally hooks sign; rarely we fall back'. Reality (install.ts L161-193): forge ITSELF stubs the hooks. The fallback is the only path that ever runs. The receipt chain advertised in README L82 is a lie of omission.",
+      "fix": "Rewrite L160-163 to lead with the reality: 'forge generates per-gate signed receipts using `@veritasacta/verify sign-payload`. The upstream protect-mcp PreToolUse hooks are currently stubbed because they invoke an obsolete `evaluate` subcommand. When upstream protect-mcp v2 ships, hook-level signing returns and receipts include per-tool-call entries.' Honesty here costs forge nothing and protects against 'you lied to me' complaints later."
+    },
+    {
+      "id": "ca-05",
+      "parcel": "p03-code-quality",
+      "file": "forge/src/install.ts, doctor.ts",
+      "lines": "install 207-216, doctor everywhere",
+      "confidence": 75,
+      "severity": "low",
+      "title": "Emoji-prefixed log strings are visual comments — convert to a structured log layer once and stop reinventing prefix conventions",
+      "evidence": "'✓' for success, '✗' for fail, '⚠' for warn, '−' for skip, '🔨' for forge brand, '✅' for done, '👉' for next-step. Five emoji used across install.ts; a sixth ('⏭️' or 'ℹ') is missing for 'informational' which currently falls back to a bare '  ' indent.",
+      "fix": "`log.success(msg) / log.fail(msg) / log.warn(msg) / log.skip(msg) / log.info(msg)` in src/log.ts. Single emoji map. Auto-stripped in NO_COLOR / piped / --output=json modes."
+    }
+  ]
+}

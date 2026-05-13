@@ -1,0 +1,14 @@
+{
+  "name": "forge",
+  "version": "0.0.1",
+  "description": "One-command coding pipeline: plan → research → council → code → verify (PBT + mutation + browser) → ship PR with signed audit chain.",
+  "author": {
+    "name": "Youssef Kadaoui Abbassi",
+    "email": "youssefabbassi4@gmail.com",
+    "url": "https://github.com/youssefKadaouiAbbassi"
+  },
+  "homepage": "https://github.com/youssefKadaouiAbbassi/forge",
+  "repository": "https://github.com/youssefKadaouiAbbassi/forge",
+  "license": "MIT",
+  "keywords": ["tdd", "property-based-testing", "mutation-testing", "audit-chain", "council", "pr-review", "browser-verify"]
+}

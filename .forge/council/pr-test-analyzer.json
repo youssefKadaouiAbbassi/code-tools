@@ -1,0 +1,72 @@
+{
+  "persona": "pr-test-analyzer",
+  "model": "opus",
+  "findings": [
+    {
+      "id": "pta-01",
+      "parcel": "p03-code-quality",
+      "file": "forge/tests/L0/scaffold.test.ts, L1/*, L2/*, L3/*",
+      "lines": "all 21 test files",
+      "confidence": 85,
+      "severity": "medium",
+      "title": "Test layers L0–L3 cover the plugin runbook + hooks heavily but src/*.ts (the CLI itself) has zero direct unit tests",
+      "evidence": "wc -l shows 3542 lines of tests targeting: plugin manifest, /forge:* slash commands, Stryker/fast-check/mutmut/cargo-mutants tool presence, Cedar policy, hooks.json, MCP declarations, real `claude -p` orchestration in tmp repos. NONE target src/install.ts | doctor.ts | uninstall.ts | update.ts | cli.ts directly. install() has 372 lines and 0 unit tests; its only coverage is L3 end-to-end via dev/install-harness.sh in Docker.",
+      "fix": "Add `tests/unit/install.test.ts` etc. Mock-friendly refactor first (see cs-01) — small step modules accept an injected ctx. Target: each src/*.ts file has ≥1 unit test per exported function. Bun's built-in test + an in-memory fs (memfs or a tmp-dir per test) keeps it fast."
+    },
+    {
+      "id": "pta-02",
+      "parcel": "p03-code-quality",
+      "file": "forge/tests/L3/*.ts",
+      "lines": "all L3 tests rely on `claude -p` subprocess",
+      "confidence": 80,
+      "severity": "medium",
+      "title": "L3 tests require a working `claude` binary, opus access, and live MCP servers — flaky in CI, expensive per run, no offline mode",
+      "evidence": "tests/harness/run-claude.ts (36 lines) wraps `claude -p` — every L3 test runs one. SCOREBOARD.md mentions n=20 SWE-bench cost concerns ('single run uses ~50k-200k tokens; no aggregate cost data'). L3 = 36 tests × ~100k tokens = ~3.6M tokens per test run.",
+      "fix": "Two tiers: (a) L3-mock — replace `claude -p` with a fake that emits canned JSONL transcripts the harness asserts on (recorded once, replayed forever; offline; deterministic). (b) L3-live — same tests gated behind `CI=live` env var; run weekly not per-PR. Pattern: cassette-style recording. Refs: VCR.py, nock, polly."
+    },
+    {
+      "id": "pta-03",
+      "parcel": "p05-pipeline-design",
+      "file": "forge/plugin/skills/forge/SKILL.md",
+      "lines": "89-105 Phase 3",
+      "confidence": 90,
+      "severity": "high",
+      "title": "Council is mandatory + unconditional + opus-only — cost-amplifies every /forge run by 6-7×",
+      "evidence": "Phase 3 dispatches 6 personas + meta-judge, ALL on opus, EVEN FOR a 1-line typo. SCOREBOARD.md confirms 'tasks with council artifacts 20/20' post-hardening. At ~30k tokens per persona × 7 = 210k tokens/run just for council, before any actual code. For real engineering teams shipping multiple parcels/day, this is unaffordable without a cheap-fast-cheap variant.",
+      "fix": "Tiered council: small diffs (≤50 LOC) → 2-persona quick council on sonnet (silent-failure-hunter + code-reviewer) with confidence-bypass at 90; medium → 4-persona on sonnet w/ opus meta-judge; large → full 6 on opus. Threshold defined in `.forge/config.json`. Preserve the unconditional rule for safety-critical paths (security-tagged parcels). Reference: SCOREBOARD.md notes '5% strict-score difference is sample variance (n=20)' — council benefit is real but not free."
+    },
+    {
+      "id": "pta-04",
+      "parcel": "p05-pipeline-design",
+      "file": "forge/plugin/skills/pbt-verify/SKILL.md",
+      "lines": "26-37 property derivation table + 38-48 anti-property guardrails",
+      "confidence": 88,
+      "severity": "high",
+      "title": "Static property-derivation table is brittle — it pattern-matches function names, not semantics",
+      "evidence": "Table at L26-37 derives properties from regex matches on function name (`add`, `subtract`, `parse`, `sort`). Any pure-fn whose name doesn't match the table → VERDICT=MISSING with reason='no-derivable-property', which the runbook says PASSES (L140). So a custom-named pure function silently bypasses the gate. Anti-property guardrail catches commutative-subtract but not deeper hazards (e.g. floating-point assoc, integer overflow). 2026 research (TU Wien property-based mutation paper) shows automated property mining from existing tests works better.",
+      "fix": "Replace the static table with a prompt to opus: 'given this function signature + body + existing tests, propose 3-5 properties; for each, classify as commutative/associative/idempotent/roundtrip/monotonic/invariant; for each, generate the fast-check property; reject if your confidence < 0.7'. Persist generated property + generator-confidence in `.forge/pbt/<parcel>-props.json` for review. The static table becomes a fallback when the LLM-generated set is empty."
+    },
+    {
+      "id": "pta-05",
+      "parcel": "p05-pipeline-design",
+      "file": "forge/plugin/skills/browser-verify/SKILL.md",
+      "lines": "20-22",
+      "confidence": 85,
+      "severity": "medium",
+      "title": "browser-verify skips silently when package.json has no scripts.dev — the gate it claims to enforce becomes opt-out by default",
+      "evidence": "L21-22: `[ -z \"$DEV_CMD\" ] && { echo '{\"gate\":\"browser-verify\",\"result\":\"skip\",\"reason\":\"no-dev-script\"}' > ...; exit 0; }`. Any UI parcel in a repo without `scripts.dev` (e.g. monorepo with `bun run dev:web`, framework-specific `next dev` invoked from a different path) skips the gate. Runbook L82 says 'browser-verify console error or 4xx/5xx → ship-blocking' but the gate doesn't fire on common monorepo layouts.",
+      "fix": "Try multiple detection heuristics (next.config.*, vite.config.*, astro.config.*, package.json `scripts.dev`/`scripts.start`/`scripts.serve`/`scripts.web`) then ask the user (or feature-dev plan) to declare. Skip-with-warning instead of skip-silently when none match. Block ship if the parcel claim mentions UI keywords but no dev server detected."
+    },
+    {
+      "id": "pta-06",
+      "parcel": "p05-pipeline-design",
+      "file": "forge/tests/L3/verify-ship.test.ts, full-pipeline.test.ts",
+      "lines": "n/a — meta-observation",
+      "confidence": 78,
+      "severity": "medium",
+      "title": "No chaos / failure-injection tests — the recovery rules in forge-lead.md (worker timeout, two consecutive parcel failures, council/worker disagreement) lack negative-path coverage",
+      "evidence": "L3/failure-modes.test.ts (241 lines) exists but mostly tests Phase 1 plan rejection (DAG cycle, multi-repo bail, etc.). No tests where a worker subagent legitimately produces a green test then hangs at minute 15 (kill+restore path), where one persona returns 79 confidence and another returns 81 on the same finding (meta-judge disagree path), where the protect-mcp signing throws mid-stream (chain-recovery path).",
+      "fix": "Add tests/L3/chaos/*.test.ts: spawn a worker that sleeps > timeout (assert killed); spawn a council that returns disagreement (assert escalation); corrupt one receipt mid-chain (assert verify-chain fail surfaces). Use fault-injection harness like toxiproxy if any network is involved."
+    }
+  ]
+}
