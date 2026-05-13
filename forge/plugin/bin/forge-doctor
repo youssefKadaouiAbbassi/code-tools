@@ -39,7 +39,7 @@ print_banner() {
   ver "apprise" "apprise --version" || fail=1
   ver "gh" "gh --version" || fail=1
   ver "veritasacta" "cat /root/.bun/install/global/node_modules/@veritasacta/verify/package.json 2>/dev/null | jq -r '\"@veritasacta/verify@\" + .version'" || fail=1
-  ver "tdd-guard" "tdd-guard --version 2>/dev/null || which tdd-guard" || fail=1
+  ver "tdd-guard" "cat /root/.bun/install/global/node_modules/tdd-guard/package.json 2>/dev/null | jq -r '\"tdd-guard@\" + .version' || (which tdd-guard >/dev/null && echo tdd-guard-installed)" || fail=1
   ver "snyk" "npx -y snyk@latest --version 2>/dev/null | head -1" || fail=1
 
   echo

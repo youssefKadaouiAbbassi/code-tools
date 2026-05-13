@@ -144,6 +144,13 @@ export async function run(args: string[]): Promise<void> {
   }
 }
 
+// Required skills installed by the docker-dev entrypoint (forge/dev/init-forge-dev.sh):
+//   - microsoft/playwright-cli (browser-verify gate)
+// When running outside docker, users should `npx skills@latest add microsoft/playwright-cli -g -y`
+// manually. Inlining this into the install.ts flow is tracked but blocked by the project's
+// tdd-guard hook (which currently mis-classifies the addition as premature implementation
+// despite the failing-test precondition being satisfied).
+
 async function ensureKMP(): Promise<void> {
   await Bun.write(KMP_PATH, JSON.stringify({}, null, 2)).catch(() => {});
   if (!existsSync(KMP_PATH)) {

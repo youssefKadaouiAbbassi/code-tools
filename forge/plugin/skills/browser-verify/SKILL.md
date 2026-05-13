@@ -29,10 +29,29 @@ URL="http://localhost:$PORT"
 ## 2. Boot dev server via webapp-testing's with_server.py wrapper
 
 ```bash
-# Use anthropics/skills:webapp-testing's with_server.py — handles boot timeout, ready probe, teardown.
-python3 -m webapp_testing.with_server --cmd "$DEV_CMD" --port "$PORT" --ready-path / --timeout 30 &
+# Locate or fetch anthropics/skills:webapp-testing/scripts/with_server.py.
+# It is a Python SCRIPT (not an installable module — `python -m webapp_testing.with_server`
+# does NOT work). The correct invocation is `python <path-to-script>` with positional command
+# after `--`. See https://github.com/anthropics/skills/blob/main/skills/webapp-testing/scripts/with_server.py
+WITH_SERVER="$(find /root/.claude /workspace /opt -name with_server.py -path '*webapp-testing*' 2>/dev/null | head -1)"
+if [ -z "$WITH_SERVER" ]; then
+  WITH_SERVER=".forge/browser/with_server.py"
+  curl -fsSL https://raw.githubusercontent.com/anthropics/skills/main/skills/webapp-testing/scripts/with_server.py -o "$WITH_SERVER"
+fi
+
+# Background the wrapper. It starts the dev server, waits for the port to accept TCP,
+# then runs the positional command (we use `sleep infinity` to keep the server up
+# while Playwright drives it; we kill the wrapper at teardown).
+python3 "$WITH_SERVER" --server "$DEV_CMD" --port "$PORT" --timeout 30 -- sleep infinity &
 WT_PID=$!
 echo "$WT_PID" > .forge/browser/$PARCEL_ID/with_server.pid
+
+# Poll until port is accepting connections (with_server already does this, but a small
+# extra guard accommodates apps that 4xx on /). 10 retries × 1s = 10s ceiling.
+for i in $(seq 1 10); do
+  curl -fsS -o /dev/null "$URL" 2>/dev/null && break
+  sleep 1
+done
 ```
 
 ## 3. Drive via Playwright headless
