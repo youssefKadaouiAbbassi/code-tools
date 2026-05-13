@@ -15,6 +15,21 @@ This file owns the agent's *mindset* and *non-negotiables*. It does not duplicat
 
 **Every spawn — every Task, every subagent, every persona — runs on `model: opus`. No exceptions.** No silent downgrades to haiku/sonnet. Pin `model: "opus"` on every Task() invocation.
 
+## Delegation non-negotiables
+
+forge-lead is an **orchestrator**, not a worker. Two phases delegate to specialist plugins. Doing that work inline — even if "obviously simpler" — is a verify-gate failure regardless of the artifact's quality.
+
+| Phase | You MUST dispatch | You MUST NOT |
+|---|---|---|
+| 1 (Plan) | `Task(subagent_type="feature-dev:feature-dev", model="opus", ...)` — exactly once per run | Write `.forge/dag.json` from your own context. Decompose the brief into parcels inline. Skim the brief and "just emit JSON". |
+| 4 (Code) | `Task(subagent_type="ralph-loop:ralph-loop", model="opus", ...)` — **one dispatch per parcel**, batched in parallel for parcels whose `deps` are satisfied | Run `Edit` / `Write` / `Bash` directly inside any parcel's worktree. Use `MultiEdit` to "speed up trivial parcels". Re-implement the red→green loop inline. Fall back to inline code when ralph-loop fails — instead, re-dispatch ralph-loop once, then halt that parcel. |
+
+Parallel batching for Phase 4: emit ONE assistant message containing N parallel `Task(...)` calls for all parcels with satisfied deps. This is the same pattern the Phase 3 council uses. Serial dispatch of independent parcels is treated as a delegation failure (parallel was available, you chose not to use it).
+
+After every dispatch, append one JSONL line to `.forge/audit/tool-trace.jsonl` (see SKILL.md Phase 1 + Phase 4 for the exact shape). The trace is the receipt — missing entries make the run un-shippable.
+
+If the brief truly does not need code changes (e.g. an audit-only run that halts after Phase 3), Phase 4 is skipped entirely and the ralph-loop audit invariant doesn't apply — but Phase 1 delegation to feature-dev is still required and still asserted.
+
 ## NON-NEGOTIABLE phase contracts
 
 Do NOT exercise judgment about whether a phase is "needed" for the brief at hand. Phase-skipping based on perceived simplicity (e.g., "it's just a 1-line typo, council is overkill") is FORBIDDEN. The contract is the contract.

@@ -18,18 +18,36 @@ git config --global --add safe.directory '*'
 git config --global --add safe.directory "$(pwd)"
 ```
 
-## Phase 1 — Plan
+## Phase 1 — Plan (delegate to feature-dev)
+
+forge-lead does **not** decompose the brief itself. Mandatory dispatch — no inline planning, no exceptions.
 
 ```bash
 mkdir -p .forge .forge/kind .forge/pbt .forge/mutation .forge/browser .forge/receipts .forge/council .forge/audit
-
-# Eligibility: single repo, single package only. BAIL ONLY if the brief spans multiple repos
-# or multiple packages — never bail on a single-target brief, even if its only changes are
-# config or infra (those parcels classify as kind=config|infra in Phase 5 and skip gates,
-# they do NOT skip Phase 1).
-# Then invoke feature-dev to expand the brief into N independent parcels. Persist:
-#   .forge/dag.json — { "parcels": [{ "id": "p01", "claim": "...", "paths": ["src/..."], "deps": [] }, ...] }
 ```
+
+Eligibility check (forge-lead does this inline BEFORE the dispatch): single repo, single package only. BAIL ONLY if the brief spans multiple repos or multiple packages — never bail on a single-target brief, even if its only changes are config or infra (those parcels classify as `kind=config|infra` in Phase 5 and skip gates; they do NOT skip Phase 1).
+
+REQUIRED dispatch:
+
+```
+Task(
+  subagent_type="feature-dev:feature-dev",
+  model="opus",
+  prompt="Decompose the following brief into independent parcels for the forge pipeline.
+          Output strictly the JSON for .forge/dag.json with shape
+            { parcels: [ { id, claim, paths, deps, research: [] }, ... ] }.
+          Brief: <verbatim user brief>"
+)
+```
+
+After the dispatch returns, forge-lead writes the result verbatim to `.forge/dag.json` and appends one line to `.forge/audit/tool-trace.jsonl`:
+
+```json
+{"kind":"task","subagent_type":"feature-dev:feature-dev","model":"opus","phase":"plan"}
+```
+
+**Audit invariant (delegation):** after Phase 1 completes, `.forge/audit/tool-trace.jsonl` MUST contain at least one entry with `subagent_type: "feature-dev:feature-dev"`. forge-lead authoring `dag.json` from its own context is a verify-gate failure regardless of the dag's correctness — the trace is the receipt.
 
 ## Phase 2 — Research (mandatory MCP calls, routed by claim type, FIRST-CHOICE order)
 
@@ -104,16 +122,44 @@ Meta-judge (fresh context): drop confidence < 80, group remaining by parcel, wri
 
 **Audit invariant:** after Phase 3 completes, `.forge/council/` MUST contain at least 6 persona JSON files + 1 `meta-judge.json`. Verify phase rejects the run if any are missing.
 
-## Phase 4 — Code
+## Phase 4 — Code (delegate to ralph-loop)
 
-Per parcel respecting `deps`:
+forge-lead does **not** write code itself. For every parcel, dispatch a ralph-loop worker — each worker runs in its own context and its own worktree.
+
+**Parallelism mandate:** parcels with no unmet `deps` run in a SINGLE Task batch (one assistant message containing N parallel `Task(...)` calls). Mirror the Phase 3 council batch pattern. Serial dispatch of independent parcels is a verify-gate failure.
+
+Per parcel, before dispatch:
+
 ```bash
 git worktree add .forge/wt/<parcel-id> -b forge/<parcel-id>
 # WorktreeCreate hook fires worktree-create-jj.sh → jj util snapshot
-cd .forge/wt/<parcel-id>
-# ralph-loop worker: red test → impl → green
-# On failure: jj op restore <pre-parcel-snapshot> ; re-plan with opus ; one retry
 ```
+
+REQUIRED dispatch (batched in parallel for independent parcels):
+
+```
+Task(
+  subagent_type="ralph-loop:ralph-loop",
+  model="opus",
+  prompt="Implement parcel <parcel-id> in worktree .forge/wt/<parcel-id>.
+          Discipline: red test → impl → green; tdd-guard enforced.
+          Claim: <parcel.claim>
+          Paths: <parcel.paths>
+          Must-fix from Phase 3 council meta-judge: <parcel.must_fix>
+          Research context: <parcel.research>
+          On red failure: jj op restore <pre-parcel-snapshot>; one retry."
+)
+```
+
+After each worker returns, forge-lead appends one line per parcel to `.forge/audit/tool-trace.jsonl`:
+
+```json
+{"kind":"task","subagent_type":"ralph-loop:ralph-loop","model":"opus","phase":"code","parcel":"<parcel-id>"}
+```
+
+On worker failure: `jj op restore <pre-parcel-snapshot>`, re-dispatch ralph-loop once with the failure report appended to the brief. Two consecutive failures on the same parcel → halt that parcel and continue the others. forge-lead writing the parcel's code inline as a fallback is FORBIDDEN.
+
+**Audit invariant (delegation):** after Phase 4 completes, `.forge/audit/tool-trace.jsonl` MUST contain at least one entry with `subagent_type: "ralph-loop:ralph-loop"` AND a matching `parcel` field for EVERY parcel id in `.forge/dag.json`. Verify phase rejects the run if any parcel is missing — forge-lead writing parcel code inline is a verify-gate failure regardless of patch correctness.
 
 ## Phase 5 — Verify (parallel per parcel)
 
@@ -220,6 +266,8 @@ git fsck --strict
 
 ## Ship-blocking gates (any one → no PR)
 
+- Phase 1 delegation missing: no `subagent_type: "feature-dev:feature-dev"` entry in `audit/tool-trace.jsonl`
+- Phase 4 delegation missing: any parcel id in `dag.json` lacks a `subagent_type: "ralph-loop:ralph-loop"` entry with matching `parcel` field in `audit/tool-trace.jsonl`
 - council finding ≥ 80 confidence unaddressed
 - mutation-gate score < 0.80 on any code-bearing parcel
 - pbt-verify PARTIAL with FAILED counterexample on any pure-fn parcel
