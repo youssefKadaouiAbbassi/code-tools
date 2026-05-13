@@ -18,7 +18,7 @@ git config --global --add safe.directory '*'
 git config --global --add safe.directory "$(pwd)"
 ```
 
-## Phase 1 — Plan (delegate to feature-dev)
+## Phase 1 — Plan (delegate to feature-dev:code-architect)
 
 forge-lead does **not** decompose the brief itself. Mandatory dispatch — no inline planning, no exceptions.
 
@@ -28,26 +28,32 @@ mkdir -p .forge .forge/kind .forge/pbt .forge/mutation .forge/browser .forge/rec
 
 Eligibility check (forge-lead does this inline BEFORE the dispatch): single repo, single package only. BAIL ONLY if the brief spans multiple repos or multiple packages — never bail on a single-target brief, even if its only changes are config or infra (those parcels classify as `kind=config|infra` in Phase 5 and skip gates; they do NOT skip Phase 1).
 
+**Why this specific subagent (verified against the on-disk plugin):** the `feature-dev` plugin ships **three** Task subagents — `code-explorer`, `code-architect`, `code-reviewer` — plus an interactive `/feature-dev` slash-command. The slash-command stops to ask the user questions ("DO NOT START WITHOUT USER APPROVAL", "Ask user which approach"), so it cannot be invoked from headless forge-lead. `code-architect` is the correct primitive — its description: *"Designs feature architectures by analyzing existing codebase patterns and conventions, then providing comprehensive implementation blueprints with specific files to create/modify, component designs, data flows, and build sequences."* That is parcel-DAG decomposition by another name.
+
 REQUIRED dispatch:
 
 ```
 Task(
-  subagent_type="feature-dev:feature-dev",
+  subagent_type="feature-dev:code-architect",
   model="opus",
   prompt="Decompose the following brief into independent parcels for the forge pipeline.
           Output strictly the JSON for .forge/dag.json with shape
-            { parcels: [ { id, claim, paths, deps, research: [] }, ... ] }.
+            { parcels: [ { id, claim, paths, deps, research: [], must_fix: [] }, ... ] }.
+          Independence: a parcel with empty `deps` must be implementable without any other
+          parcel's output. Use `deps: [<id>, ...]` only when strictly necessary.
           Brief: <verbatim user brief>"
 )
 ```
 
-After the dispatch returns, forge-lead writes the result verbatim to `.forge/dag.json` and appends one line to `.forge/audit/tool-trace.jsonl`:
+Optional follow-on (dispatch in parallel with the planner when the brief is large or unfamiliar): up to 2 `feature-dev:code-explorer` subagents for codebase analysis — the architect reads their outputs to ground its blueprint.
+
+After the dispatch returns, forge-lead writes the JSON verbatim to `.forge/dag.json` and appends one line to `.forge/audit/tool-trace.jsonl`:
 
 ```json
-{"kind":"task","subagent_type":"feature-dev:feature-dev","model":"opus","phase":"plan"}
+{"kind":"task","subagent_type":"feature-dev:code-architect","model":"opus","phase":"plan"}
 ```
 
-**Audit invariant (delegation):** after Phase 1 completes, `.forge/audit/tool-trace.jsonl` MUST contain at least one entry with `subagent_type: "feature-dev:feature-dev"`. forge-lead authoring `dag.json` from its own context is a verify-gate failure regardless of the dag's correctness — the trace is the receipt.
+**Audit invariant (delegation):** after Phase 1 completes, `.forge/audit/tool-trace.jsonl` MUST contain at least one entry with `subagent_type: "feature-dev:code-architect"`. forge-lead authoring `dag.json` from its own context is a verify-gate failure regardless of the dag's correctness — the trace is the receipt.
 
 ## Phase 2 — Research (mandatory MCP calls, routed by claim type, FIRST-CHOICE order)
 
@@ -122,9 +128,13 @@ Meta-judge (fresh context): drop confidence < 80, group remaining by parcel, wri
 
 **Audit invariant:** after Phase 3 completes, `.forge/council/` MUST contain at least 6 persona JSON files + 1 `meta-judge.json`. Verify phase rejects the run if any are missing.
 
-## Phase 4 — Code (delegate to ralph-loop)
+## Phase 4 — Code (delegate to tdd-workflows:tdd-orchestrator)
 
-forge-lead does **not** write code itself. For every parcel, dispatch a ralph-loop worker — each worker runs in its own context and its own worktree.
+forge-lead does **not** write code itself. For every parcel, dispatch one Task subagent — each worker runs in its own context and its own worktree.
+
+**Why NOT ralph-loop:** `ralph-loop` is **not a Task subagent**. The upstream `claude-plugins-official/ralph-loop` plugin ships only a `/ralph-loop` slash-command + a `Stop` hook (`hooks/stop-hook.sh`) that re-injects the same prompt into the **current session** when the agent tries to stop. It is a session-local autonomous-loop pattern, not a delegation primitive — `Task(subagent_type="ralph-loop:...")` would fail because no such subagent exists, and N parallel ralph-loop "workers" would all loop on the same session anyway. The Ralph technique is for unattended single-thread iteration; forge wants parallel, isolated workers.
+
+**Why `tdd-workflows:tdd-orchestrator`:** it's a real Task subagent with the right shape — *"Master TDD orchestrator specializing in red-green-refactor discipline, multi-agent workflow coordination, and comprehensive test-driven development practices."* It gets its own context window (so 200K-token parcel work doesn't leak into forge-lead) and runs in parallel safely. If `tdd-workflows` is not installed in the project, fall back to `general-purpose` with a TDD-discipline prompt — never to inline forge-lead edits.
 
 **Parallelism mandate:** parcels with no unmet `deps` run in a SINGLE Task batch (one assistant message containing N parallel `Task(...)` calls). Mirror the Phase 3 council batch pattern. Serial dispatch of independent parcels is a verify-gate failure.
 
@@ -139,27 +149,27 @@ REQUIRED dispatch (batched in parallel for independent parcels):
 
 ```
 Task(
-  subagent_type="ralph-loop:ralph-loop",
+  subagent_type="tdd-workflows:tdd-orchestrator",   # fallback: "general-purpose"
   model="opus",
   prompt="Implement parcel <parcel-id> in worktree .forge/wt/<parcel-id>.
-          Discipline: red test → impl → green; tdd-guard enforced.
+          Discipline: red test → impl → green → refactor; tdd-guard hooks enforced.
           Claim: <parcel.claim>
           Paths: <parcel.paths>
           Must-fix from Phase 3 council meta-judge: <parcel.must_fix>
           Research context: <parcel.research>
-          On red failure: jj op restore <pre-parcel-snapshot>; one retry."
+          On red-state escape attempt: jj op restore <pre-parcel-snapshot>; one retry only."
 )
 ```
 
 After each worker returns, forge-lead appends one line per parcel to `.forge/audit/tool-trace.jsonl`:
 
 ```json
-{"kind":"task","subagent_type":"ralph-loop:ralph-loop","model":"opus","phase":"code","parcel":"<parcel-id>"}
+{"kind":"task","subagent_type":"tdd-workflows:tdd-orchestrator","model":"opus","phase":"code","parcel":"<parcel-id>"}
 ```
 
-On worker failure: `jj op restore <pre-parcel-snapshot>`, re-dispatch ralph-loop once with the failure report appended to the brief. Two consecutive failures on the same parcel → halt that parcel and continue the others. forge-lead writing the parcel's code inline as a fallback is FORBIDDEN.
+On worker failure: `jj op restore <pre-parcel-snapshot>`, re-dispatch once with the failure report appended to the brief. Two consecutive failures on the same parcel → halt that parcel and continue the others. forge-lead writing the parcel's code inline as a fallback is FORBIDDEN.
 
-**Audit invariant (delegation):** after Phase 4 completes, `.forge/audit/tool-trace.jsonl` MUST contain at least one entry with `subagent_type: "ralph-loop:ralph-loop"` AND a matching `parcel` field for EVERY parcel id in `.forge/dag.json`. Verify phase rejects the run if any parcel is missing — forge-lead writing parcel code inline is a verify-gate failure regardless of patch correctness.
+**Audit invariant (delegation):** after Phase 4 completes, `.forge/audit/tool-trace.jsonl` MUST contain at least one entry with `subagent_type` in `{"tdd-workflows:tdd-orchestrator", "general-purpose"}` AND a matching `parcel` field for EVERY parcel id in `.forge/dag.json`. Verify phase rejects the run if any parcel is missing — forge-lead writing parcel code inline is a verify-gate failure regardless of patch correctness.
 
 ## Phase 5 — Verify (parallel per parcel)
 
@@ -266,8 +276,8 @@ git fsck --strict
 
 ## Ship-blocking gates (any one → no PR)
 
-- Phase 1 delegation missing: no `subagent_type: "feature-dev:feature-dev"` entry in `audit/tool-trace.jsonl`
-- Phase 4 delegation missing: any parcel id in `dag.json` lacks a `subagent_type: "ralph-loop:ralph-loop"` entry with matching `parcel` field in `audit/tool-trace.jsonl`
+- Phase 1 delegation missing: no `subagent_type: "feature-dev:code-architect"` entry in `audit/tool-trace.jsonl`
+- Phase 4 delegation missing: any parcel id in `dag.json` lacks a `subagent_type` ∈ `{"tdd-workflows:tdd-orchestrator", "general-purpose"}` entry with matching `parcel` field in `audit/tool-trace.jsonl`
 - council finding ≥ 80 confidence unaddressed
 - mutation-gate score < 0.80 on any code-bearing parcel
 - pbt-verify PARTIAL with FAILED counterexample on any pure-fn parcel
