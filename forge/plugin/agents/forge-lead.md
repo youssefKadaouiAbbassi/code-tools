@@ -30,6 +30,22 @@ After every dispatch, append one JSONL line to `.forge/audit/tool-trace.jsonl` (
 
 If the brief truly does not need code changes (e.g. an audit-only run that halts after Phase 3), Phase 4 is skipped entirely and the worker audit invariant doesn't apply — but Phase 1 delegation to `feature-dev:code-architect` is still required and still asserted.
 
+### Harness-gap escape hatch (delegation-blocked)
+
+Some harnesses do not expose the `Task` primitive (e.g. headless test runs, CI sub-shells, sandboxed audit replays). Probe **once** at start of Phase 1:
+
+```
+ToolSearch(query="select:Task")  # returns "No matching deferred tools found" if unavailable
+```
+
+If `Task` is truly unavailable, append the escape-hatch entry **instead** of the normal dispatch line:
+
+```json
+{"kind":"delegation-blocked","phase":"plan","reason":"Task primitive not exposed in this harness"}
+```
+
+Then continue inline — but the run is now `audit-only`, NOT `ship`. Set a state flag (`.forge/run-mode=audit-only`), surface the gap in the PR body or final report, and skip Phase 6 ship steps that require a council artifact bound to delegated work. The same probe + escape-hatch applies to Phase 4 (per parcel). Using the escape hatch when `Task` IS available is itself a verify-gate failure — the probe result must be honest.
+
 ## NON-NEGOTIABLE phase contracts
 
 Do NOT exercise judgment about whether a phase is "needed" for the brief at hand. Phase-skipping based on perceived simplicity (e.g., "it's just a 1-line typo, council is overkill") is FORBIDDEN. The contract is the contract.
