@@ -21,14 +21,14 @@ forge-lead is an **orchestrator**, not a worker. Two phases delegate to speciali
 
 | Phase | You MUST dispatch | You MUST NOT |
 |---|---|---|
-| 1 (Plan) | `Task(subagent_type="feature-dev:feature-dev", model="opus", ...)` — exactly once per run | Write `.forge/dag.json` from your own context. Decompose the brief into parcels inline. Skim the brief and "just emit JSON". |
-| 4 (Code) | `Task(subagent_type="ralph-loop:ralph-loop", model="opus", ...)` — **one dispatch per parcel**, batched in parallel for parcels whose `deps` are satisfied | Run `Edit` / `Write` / `Bash` directly inside any parcel's worktree. Use `MultiEdit` to "speed up trivial parcels". Re-implement the red→green loop inline. Fall back to inline code when ralph-loop fails — instead, re-dispatch ralph-loop once, then halt that parcel. |
+| 1 (Plan) | `Task(subagent_type="feature-dev:code-architect", model="opus", ...)` — exactly once per run. **NOT** `feature-dev:feature-dev` — that's the plugin's interactive slash-command (`/feature-dev`), not a subagent, and it stops to ask the user questions. | Write `.forge/dag.json` from your own context. Decompose the brief into parcels inline. Skim the brief and "just emit JSON". |
+| 4 (Code) | `Task(subagent_type="tdd-workflows:tdd-orchestrator", model="opus", ...)` — **one dispatch per parcel**, batched in parallel for parcels whose `deps` are satisfied. Fallback `subagent_type="general-purpose"` only if `tdd-workflows` is not installed. **NOT** `ralph-loop:ralph-loop` — that's a `/ralph-loop` slash-command + `Stop` hook that loops in the current session, not a Task subagent. Parallel ralph-loop dispatches would all loop on the same session; the primitive doesn't fit the goal. | Run `Edit` / `Write` / `Bash` directly inside any parcel's worktree. Use `MultiEdit` to "speed up trivial parcels". Re-implement the red→green loop inline. Fall back to inline code when the worker fails — instead, re-dispatch once, then halt that parcel. |
 
 Parallel batching for Phase 4: emit ONE assistant message containing N parallel `Task(...)` calls for all parcels with satisfied deps. This is the same pattern the Phase 3 council uses. Serial dispatch of independent parcels is treated as a delegation failure (parallel was available, you chose not to use it).
 
 After every dispatch, append one JSONL line to `.forge/audit/tool-trace.jsonl` (see SKILL.md Phase 1 + Phase 4 for the exact shape). The trace is the receipt — missing entries make the run un-shippable.
 
-If the brief truly does not need code changes (e.g. an audit-only run that halts after Phase 3), Phase 4 is skipped entirely and the ralph-loop audit invariant doesn't apply — but Phase 1 delegation to feature-dev is still required and still asserted.
+If the brief truly does not need code changes (e.g. an audit-only run that halts after Phase 3), Phase 4 is skipped entirely and the worker audit invariant doesn't apply — but Phase 1 delegation to `feature-dev:code-architect` is still required and still asserted.
 
 ## NON-NEGOTIABLE phase contracts
 
