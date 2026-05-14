@@ -36,10 +36,16 @@ ast_ui() {
   return 1
 }
 
+# Strong-IO claim terms that should beat config matching (e.g. an auth /refresh
+# route is io even if the architect happens to write the handler under a config/
+# directory). Otherwise config still wins for tsconfig/package.json/.env edits.
+io_strong_claim='\b(route|endpoint|api|handler|controller|http|request handler|response)\b'
+
 if echo "$PATHS" | grep -qE "$ui_path" || echo "$CLAIM" | grep -qiE "$ui_claim" || ast_ui; then echo ui
 elif echo "$PATHS" | grep -qE "$infra_path" || echo "$CLAIM" | grep -qiE "$infra_claim"; then echo infra
+elif echo "$PATHS" | grep -qE "$io_path" || echo "$CLAIM" | grep -qiE "$io_strong_claim"; then echo io
 elif echo "$PATHS" | grep -qE "$config_path" || echo "$CLAIM" | grep -qiE "$config_claim"; then echo config
-elif echo "$PATHS" | grep -qE "$io_path" || echo "$CLAIM" | grep -qiE "$io_claim"; then echo io
+elif echo "$CLAIM" | grep -qiE "$io_claim"; then echo io
 else echo pure-fn
 fi
 ```

@@ -26,7 +26,13 @@ forge-lead does **not** decompose the brief itself. Mandatory dispatch — no in
 mkdir -p .forge .forge/kind .forge/pbt .forge/mutation .forge/browser .forge/receipts .forge/council .forge/audit
 ```
 
-Eligibility check (forge-lead does this inline BEFORE the dispatch): single repo, single package only. BAIL ONLY if the brief spans multiple repos or multiple packages — never bail on a single-target brief, even if its only changes are config or infra (those parcels classify as `kind=config|infra` in Phase 5 and skip gates; they do NOT skip Phase 1).
+Eligibility: forge accepts any brief — single-repo, multi-repo, single-package, monorepo. No bail. Multi-repo briefs are handled by:
+- The architect emits parcels with an optional `repo` field (absolute path or git remote) in addition to `paths[]`. Single-repo runs omit `repo` (defaults to `process.cwd()`).
+- Phase 4 creates each parcel's worktree under its declared `repo` (`git -C <repo> worktree add ...`).
+- Phase 6 merges each parcel back into its own repo's integration branch and writes a forge-meta trailer commit per repo (`forge-meta-<sanitized-repo>` if multiple, plain `forge-meta` if one).
+- Phase 6 opens one PR per repo touched (or one PR total if all parcels share a repo).
+
+The architect should still BAIL if the brief is too vague to decompose at all (no concrete claim), but never bail on scope alone. Cross-repo coordination is a first-class case, not an escape.
 
 **Why this specific subagent (verified against the on-disk plugin):** the `feature-dev` plugin ships **three** Task subagents — `code-explorer`, `code-architect`, `code-reviewer` — plus an interactive `/feature-dev` slash-command. The slash-command stops to ask the user questions ("DO NOT START WITHOUT USER APPROVAL", "Ask user which approach"), so it cannot be invoked from headless forge-lead. `code-architect` is the correct primitive — its description: *"Designs feature architectures by analyzing existing codebase patterns and conventions, then providing comprehensive implementation blueprints with specific files to create/modify, component designs, data flows, and build sequences."* That is parcel-DAG decomposition by another name.
 
@@ -38,9 +44,15 @@ Task(
   model="opus",
   prompt="Decompose the following brief into independent parcels for the forge pipeline.
           Output strictly the JSON for .forge/dag.json with shape
-            { parcels: [ { id, claim, paths, deps, research: [], must_fix: [] }, ... ] }.
-          Independence: a parcel with empty `deps` must be implementable without any other
-          parcel's output. Use `deps: [<id>, ...]` only when strictly necessary.
+            { parcels: [ { id, claim, paths, deps, repo?, research: [], must_fix: [] }, ... ] }.
+          - `paths` is relative to the parcel's `repo` (or cwd if `repo` is omitted).
+          - `repo` is an absolute filesystem path. Set it when the brief spans multiple repos;
+            omit it for single-repo briefs (defaults to the cwd where forge was invoked).
+          - Independence: a parcel with empty `deps` must be implementable without any other
+            parcel's output. Use `deps: [<id>, ...]` only when strictly necessary.
+          - Multi-repo briefs are first-class. Do NOT bail because the brief touches several repos;
+            instead emit one parcel per logical change with its `repo` set, and the pipeline
+            will fan out (worktree-in-repo, merge-in-repo, forge-meta-per-repo, PR-per-repo).
           Brief: <verbatim user brief>"
 )
 ```
@@ -139,10 +151,15 @@ forge-lead does **not** write code itself. For every parcel, dispatch one Task s
 
 **Parallelism mandate:** parcels with no unmet `deps` run in a SINGLE Task batch (one assistant message containing N parallel `Task(...)` calls). Mirror the Phase 3 council batch pattern. Serial dispatch of independent parcels is a verify-gate failure.
 
-Per parcel, before dispatch:
+Per parcel, before dispatch (multi-repo aware):
 
 ```bash
-git worktree add .forge/wt/<parcel-id> -b forge/<parcel-id>
+# parcel.repo may be set by the architect for multi-repo briefs. If absent, default
+# to $(pwd). The worktree always lives under .forge/wt/<parcel-id> *inside the parcel's repo*
+# so the path is stable for forge-lead and the worker.
+REPO="$(jq -r --arg id "<parcel-id>" '.parcels[]|select(.id==$id)|.repo // empty' .forge/dag.json)"
+[ -z "$REPO" ] && REPO="$(pwd)"
+git -C "$REPO" worktree add "$REPO/.forge/wt/<parcel-id>" -b "forge/<parcel-id>"
 # WorktreeCreate hook fires worktree-create-jj.sh → jj util snapshot
 ```
 
@@ -238,22 +255,28 @@ A `tool: "manual"` mutation receipt or a missing PBT test file means the subagen
 ## Phase 6 — Ship
 
 ```bash
-# 1. MERGE PARCEL WORKTREES BACK to the integration branch.
+# 1. MERGE PARCEL WORKTREES BACK to each repo's integration branch (multi-repo aware).
 #    Without this step, parcel branches `forge/<parcel-id>` contain the worker's
 #    code but the user's checked-out branch never receives it — the run produces
 #    artifacts but no actual code change. THIS IS SHIP-BLOCKING.
-INTEGRATION_BRANCH=$(git rev-parse --abbrev-ref HEAD)  # branch user invoked /forge on
-mapfile -t PARCEL_IDS < <(jq -r '.parcels[].id' .forge/dag.json)
-for pid in "${PARCEL_IDS[@]}"; do
-  pbranch="forge/${pid}"
-  git rev-parse --verify "$pbranch" >/dev/null 2>&1 || { echo "FATAL: parcel branch $pbranch missing"; exit 1; }
-  # Merge with --no-ff so the parcel boundary is visible in history.
-  git merge --no-ff "$pbranch" -m "forge: merge parcel $pid" || \
-    { echo "FATAL: merge conflict on $pbranch — re-enter Phase 4 with conflict report"; exit 1; }
-done
-# Tear down the worktrees once their commits are merged.
-for pid in "${PARCEL_IDS[@]}"; do
-  git worktree remove --force ".forge/wt/${pid}" 2>/dev/null || true
+#
+#    For multi-repo briefs: group parcels by their `repo` field, then for each repo
+#    merge that repo's parcels into that repo's integration branch (HEAD when forge
+#    started in that repo). Single-repo briefs default repo to $(pwd).
+mapfile -t REPOS < <(jq -r '.parcels[] | (.repo // env.PWD)' .forge/dag.json | sort -u)
+for REPO in "${REPOS[@]}"; do
+  INTEGRATION_BRANCH=$(git -C "$REPO" rev-parse --abbrev-ref HEAD)
+  mapfile -t REPO_PARCELS < <(jq -r --arg r "$REPO" '.parcels[] | select((.repo // env.PWD) == $r) | .id' .forge/dag.json)
+  for pid in "${REPO_PARCELS[@]}"; do
+    pbranch="forge/${pid}"
+    git -C "$REPO" rev-parse --verify "$pbranch" >/dev/null 2>&1 || { echo "FATAL: parcel branch $pbranch missing in $REPO"; exit 1; }
+    git -C "$REPO" merge --no-ff "$pbranch" -m "forge: merge parcel $pid" || \
+      { echo "FATAL: merge conflict on $pbranch in $REPO — re-enter Phase 4 with conflict report"; exit 1; }
+  done
+  # Tear down each repo's worktrees once their commits are merged.
+  for pid in "${REPO_PARCELS[@]}"; do
+    git -C "$REPO" worktree remove --force ".forge/wt/${pid}" 2>/dev/null || true
+  done
 done
 
 # 2. Build evidence receipts for each verify-gate artifact.
@@ -296,11 +319,14 @@ if [ "$HAS_SIGNED" -gt 0 ]; then
   npx -y @veritasacta/verify@0.6.0 .forge/receipts/
 fi
 
-# 4. Write forge-meta trailers — MANDATORY (runs regardless of how step 2 produced receipts).
+# 4. Write forge-meta trailers — MANDATORY, PER REPO (runs regardless of how step 2 produced receipts).
 #
 #    Append-only invariant: any commit reachable from forge-meta BEFORE this run MUST still be
 #    reachable AFTER this run. Test this by reading the prior tip sha first, then asserting it's
 #    in `git log forge-meta` after the new commits.
+#
+#    Multi-repo: each repo gets its own forge-meta branch. Single-repo runs use plain `forge-meta`.
+#    Group receipts by their parcel's repo, then commit per-repo.
 #
 #    PROHIBITED (destroys prior work):
 #      ❌ git checkout -B forge-meta       — recreates branch at HEAD, loses prior commits
@@ -308,32 +334,40 @@ fi
 #      ❌ git branch -D forge-meta && ...  — deletes branch
 #      ❌ git reset --hard <anything>      — only safe on detached HEAD or feature branches
 #      ❌ git update-ref refs/heads/forge-meta  — direct ref manipulation
-#
-#    REQUIRED:
-PRIOR_SHA=$(git rev-parse --verify forge-meta 2>/dev/null || true)
-if [ -n "$PRIOR_SHA" ]; then
-  git checkout forge-meta              # land on existing tip; new commits append to it
-else
-  git checkout -b forge-meta           # first run, branch doesn't exist
-fi
-# After all trailer commits below, verify append-only invariant:
-#   [ -z "$PRIOR_SHA" ] || git merge-base --is-ancestor "$PRIOR_SHA" forge-meta || \
-#     { echo "FATAL: prior forge-meta commit $PRIOR_SHA was lost"; exit 1; }
-for receipt in .forge/receipts/*.json; do
-  GATE=$(jq -r .payload.gate $receipt 2>/dev/null || jq -r .gate $receipt)
-  RESULT=$(jq -r '.payload.result // .result' $receipt)
-  SCORE=$(jq -r '.payload.score // .score // "n/a"' $receipt)
-  CONF=$(jq -r '.payload.confidence // .confidence // "n/a"' $receipt)
-  git commit --allow-empty -m "forge: $GATE" \
-    --trailer "Decision-Gate: $GATE" \
-    --trailer "Decision-Result: $RESULT" \
-    --trailer "Decision-Score: $SCORE" \
-    --trailer "Decision-Confidence: $CONF"
+for REPO in "${REPOS[@]}"; do
+  PRIOR_SHA=$(git -C "$REPO" rev-parse --verify forge-meta 2>/dev/null || true)
+  if [ -n "$PRIOR_SHA" ]; then
+    git -C "$REPO" checkout forge-meta
+  else
+    git -C "$REPO" checkout -b forge-meta
+  fi
+  # Receipts live in the *root* .forge/receipts/ (forge-lead-side state). Iterate them all;
+  # each receipt names its parcel, which maps to a repo via the parcel->repo lookup we built earlier.
+  for receipt in .forge/receipts/*.json; do
+    [ -f "$receipt" ] || continue
+    PARCEL=$(jq -r '.parcel // ""' "$receipt")
+    PARCEL_REPO=$(jq -r --arg id "$PARCEL" '.parcels[] | select(.id==$id) | (.repo // env.PWD)' .forge/dag.json)
+    [ "$PARCEL_REPO" = "$REPO" ] || continue
+    GATE=$(jq -r '.payload.gate // .gate // ""' "$receipt")
+    RESULT=$(jq -r '.payload.result // .result // "n/a"' "$receipt")
+    SCORE=$(jq -r '.payload.score // .score // "n/a"' "$receipt")
+    CONF=$(jq -r '.payload.confidence // .confidence // "n/a"' "$receipt")
+    git -C "$REPO" commit --allow-empty -m "forge: $GATE" \
+      --trailer "Decision-Gate: $GATE" \
+      --trailer "Decision-Result: $RESULT" \
+      --trailer "Decision-Score: $SCORE" \
+      --trailer "Decision-Confidence: $CONF"
+  done
+  # Verify append-only invariant per repo.
+  [ -z "$PRIOR_SHA" ] || git -C "$REPO" merge-base --is-ancestor "$PRIOR_SHA" forge-meta || \
+    { echo "FATAL: prior forge-meta $PRIOR_SHA lost in $REPO"; exit 1; }
+  git -C "$REPO" fsck --strict
 done
-git fsck --strict
 
-# 4. Open PR via feature-dev's gh integration. PR body includes parcel summary, mutation scores, PBT verdicts, screenshot links, audit-chain link.
-# 5. Stop hook fires apprise dispatch (apprise.urls list).
+# 5. Open one PR per repo touched (or one PR total if all parcels share a repo).
+#    Use feature-dev's gh integration. PR body per repo: parcels in that repo, gate scores,
+#    cross-repo coordination notes if multiple PRs are part of the same brief.
+# 6. Stop hook fires apprise dispatch (apprise.urls list).
 ```
 
 ## Ship-blocking gates (any one → no PR)

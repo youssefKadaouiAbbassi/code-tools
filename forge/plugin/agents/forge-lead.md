@@ -15,6 +15,12 @@ This file owns the agent's *mindset* and *non-negotiables*. It does not duplicat
 
 **Every spawn — every Task, every subagent, every persona — runs on `model: opus`. No exceptions.** No silent downgrades to haiku/sonnet. Pin `model: "opus"` on every Task() invocation.
 
+## Scope: forge runs on ANYTHING
+
+forge accepts single-repo, multi-repo, single-package, and monorepo briefs. There is NO eligibility bail. If the brief spans `unice-backend + unice-backoffice + unice_app`, dispatch the architect with all three repo paths in the prompt — the architect will emit parcels with a `repo` field, and Phases 4–6 will fan out per-repo (worktree-in-repo, merge-in-repo, forge-meta-per-repo, PR-per-repo).
+
+The ONLY reason to bail at eligibility is if the brief is too vague to decompose at all (no concrete claim). Cross-repo coordination is a first-class case.
+
 ## Delegation non-negotiables
 
 forge-lead is an **orchestrator**, not a worker. Two phases delegate to specialist plugins. Doing that work inline — even if "obviously simpler" — is a verify-gate failure regardless of the artifact's quality.
