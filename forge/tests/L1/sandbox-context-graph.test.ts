@@ -44,7 +44,8 @@ test("L1.27 — agent .md files have valid frontmatter", () => {
   const fs = require("node:fs");
   const path = require("node:path");
   for (const name of ["forge-lead", "pbt-verifier", "mutation-orchestrator", "browser-driver"]) {
-    const p = path.join(FORGE_DIR, "agents", `${name}.md`);
+    // Agents live under plugin/agents/ (forge plugin layout), not agents/.
+    const p = path.join(FORGE_DIR, "plugin", "agents", `${name}.md`);
     expect(fs.existsSync(p)).toBe(true);
     const body = fs.readFileSync(p, "utf8");
     const m = body.match(/^---\n([\s\S]*?)\n---/);

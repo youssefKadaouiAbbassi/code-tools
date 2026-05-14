@@ -14,8 +14,14 @@ export async function runForge(brief: string, cwd: string, timeoutMs = 30 * 60_0
   const briefFile = join(cwd, ".forge-brief.txt");
   writeFileSync(briefFile, "/forge:forge " + brief);
   return new Promise((resolve) => {
-    const cmd = `export HOME=/home/forge CLAUDE_CONFIG_DIR=/home/forge/.claude PATH=/usr/local/bin:/usr/bin:/bin && cd ${JSON.stringify(cwd)} && BRIEF=$(cat ${JSON.stringify(briefFile)}) && claude -p "$BRIEF" --model opus --dangerously-skip-permissions`;
-    const proc = spawn("su", ["forge", "-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
+    // Why root + acceptEdits (not `su forge` + --dangerously-skip-permissions):
+    // mounted host credentials are 600 ubuntu:ubuntu inside the container, so
+    // only root can read them — `su forge` fails with "Not logged in". Root
+    // cannot use --dangerously-skip-permissions (Claude Code refuses), so we
+    // use acceptEdits. L3 tests assert what forge PRODUCES, not what it gets
+    // to skip; acceptEdits unblocks the runner for the bun build of `claude -p`.
+    const cmd = `export CLAUDE_CONFIG_DIR=/root/.claude PATH=/root/.bun/bin:/usr/local/bin:/usr/bin:/bin && cd ${JSON.stringify(cwd)} && BRIEF=$(cat ${JSON.stringify(briefFile)}) && claude -p "$BRIEF" --model opus --permission-mode acceptEdits`;
+    const proc = spawn("bash", ["-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     proc.stdout?.on("data", (b) => (stdout += b.toString()));
