@@ -79,6 +79,6 @@ This file is the audit ground-truth — tests read it directly. Skipping any ent
 ## Cross-references
 
 - **Procedural runbook (commands, phases, tables):** `skills/forge/SKILL.md`
-- **Verify-phase tools (each is its own slash-command + skill):** `/forge:derive-kind`, `/forge:pbt-verify`, `/forge:mutation-gate`, `/forge:browser-verify`, `/forge:stub-warn`
+- **Verify-phase tools (each is its own slash-command + skill):** `/forge:derive-kind`, `/forge:pbt-verify`, `/forge:mutation-gate`, `/forge:browser-verify`, `/forge:stub-warn`, plus the `tdd-guard` non-test-during-red enforcement and `protect-mcp` Cedar policy denial gate (both PENDING upstream prerequisites — see SKILL.md ship-blocking gates)
 - **Ship-blocking gates list:** `skills/forge/SKILL.md` § Ship-blocking gates
 - **Output contract (which files end up in `.forge/`):** `skills/forge/SKILL.md` § Output contract

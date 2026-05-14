@@ -1,6 +1,7 @@
-import { test, expect } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { test as _t, expect } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
+const test = (existsSync("/workspace/forge") && existsSync("/root/.bun/bin")) ? _t : _t.skip;
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 

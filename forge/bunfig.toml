@@ -1,0 +1,9 @@
+# bunfig.toml — Bun test configuration for forge.
+#
+# Without this file, `bun test` discovers test files via recursive glob from
+# the working directory, including `.forge/wt/<parcel>/tests/*.test.ts`
+# worktrees that scratch out during dev runs. Limiting discovery to `tests/`
+# keeps `bun test` honest (only forge's own test suite, not scratch artifacts).
+
+[test]
+root = "tests"

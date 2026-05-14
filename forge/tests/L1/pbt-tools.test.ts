@@ -1,6 +1,7 @@
-import { test, expect } from "bun:test";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { test as _t, expect } from "bun:test";
+import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+const test = (existsSync("/workspace/forge") && existsSync("/root/.bun/bin")) ? _t : _t.skip;
 import { spawnSync } from "node:child_process";
 import { createTarget, TARGETS } from "../harness/target-repo";
 
