@@ -50,7 +50,13 @@ If `Task` is truly unavailable, append the escape-hatch entry **instead** of the
 {"kind":"delegation-blocked","phase":"plan","reason":"Task primitive not exposed in this harness"}
 ```
 
-Then continue inline — but the run is now `audit-only`, NOT `ship`. Set a state flag (`.forge/run-mode=audit-only`), surface the gap in the PR body or final report, and skip Phase 6 ship steps that require a council artifact bound to delegated work. The same probe + escape-hatch applies to Phase 4 (per parcel). Using the escape hatch when `Task` IS available is itself a verify-gate failure — the probe result must be honest.
+Then continue inline — but the run is `audit-only`, NOT `ship`. Set a state flag (`.forge/run-mode=audit-only`), surface the gap in the PR body or final report. The same probe + escape-hatch applies to Phase 4 (per parcel). Using the escape hatch when `Task` IS available is itself a verify-gate failure — the probe result must be honest.
+
+**Critical: `audit-only` mode does NOT skip merge-back or forge-meta.** Even when delegation is blocked, the worker (inline) wrote code to parcel branches; Phase 6 MUST still:
+1. Merge each parcel branch back into its repo's integration branch — otherwise the user sees no change on their checked-out branch and the run is functionally useless.
+2. Write the per-repo forge-meta trailer commits — the audit chain is the receipt that the run happened, regardless of how delegation was performed.
+
+The ONLY Phase 6 steps `audit-only` skips are: opening a PR and any council-artifact-bound assertion that requires a real Task receipt. Merge-back and forge-meta are part of the run, not the ship.
 
 ## NON-NEGOTIABLE phase contracts
 
